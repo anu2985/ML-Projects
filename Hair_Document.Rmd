@@ -1,0 +1,833 @@
+---
+title: "Hair_Document_Analysis"
+author: "Anupama"
+date: "04/04/2020"
+output: word_document
+---
+
+```{r}
+
+toload_libraries <- c("reshape2", "rpsychi", "car", "psych", "corrplot", "forecast", "GPArotation", "psy", "MVN", "DataExplorer", "ppcor", "Metrics", "foreign", "MASS", "lattice", "nortest", "Hmisc","factoextra", "nFactors")
+#new.packages <- toload_libraries[!(toload_libraries %in% installed.packages()[,"Package"])]
+#if(length(new.packages)) install.packages(new.packages)
+lapply(toload_libraries, require, character.only= TRUE)
+library(funModeling)
+library(Hmisc)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+library(PerformanceAnalytics)
+library(nFactors)
+library(psych)
+library(flextable)
+library(officer)
+library(GGally)
+```
+
+
+# Introduction
+
+The data is a satisfactory rating study for a market segmentation with 100 observations and 13 variables. 
+The 12 variables  on which the responders have rated on a scale of **0 to 10**, where 0 being very poor and 10 rating being excellent are : *Product Quality, E-Commerce, Technical Support, Complaint Resolution, COmpetitive Pricing, Delivery Speed, Order&Billing, Advertising, Product Line, SalesForce Image,WarrantyClaims, and Customer Satisfaction*.
+The variable ID is a unique number/ID and also does not have any explanatory power for explaining Satisfaction in the regression equation. So we can safely drop ID from the dataset.  
+
+
+## Univariate Analysis
+
+```{r}
+
+hair<- read.csv("Factor-Hair-Revised.csv")
+
+dim(hair)
+
+#1.1 EDA - Basic data summary, Univariate, Bivariate analysis, graphs
+
+#removing the first column since its the ID variable
+hair1= hair[,-1]
+attach(hair1)
+
+#Summary of the data
+summary(hair1)
+
+```
+
+To summarize statistically, all the variables are numeric and continuous. There is no categorical variable and from the summary there is no missing data as well. But will further understand with the outlier table below.  
+
+```{r echo=FALSE}
+
+#checking the outliers in the data
+autofit(flextable(df_status(hair1)))
+
+```
+
+From the above table, considering columns:
+
+* q_zeros: quantity of zeros (p_zeros: in percent)
+* q_inf: quantity of infinite values (p_inf: in percent)
+* q_na: quantity of NA (p_na: in percent)
+* type: factor or numeric
+* unique: quantity of unique values 
+
+There are zero missing values, the data type is a numeric data type with unique values under each variable. TechSup or Technical Support have the highest number(50) for unique values and E-Commerce or Ecom have the least number(27) of unique values. let's understand each variable individually to understand them better.
+
+#### 1) Customer Satisfaction
+```{r}
+#overall summary of the variable
+summary(Satisfaction)
+describe(Satisfaction)
+
+#to check outliers 
+quantile(Satisfaction, probs = c( 0.99,1.00))
+range(Satisfaction)
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(Satisfaction, col="blue")
+boxplot(Satisfaction, col="darkgreen" ,horizontal = T, main="Boxplot of Satisfaction")
+```
+
+Satisfaction is the *Dependent Variable* or *Response variable*.From the histogram, this shows that Satisfaction rate is ranging closer from being likely satified to fully satisfied, with a median value of 7.05. 80% of the reponses are ranging between 5.19 and 8.00, indicating a greater Satisfaction.There are no outliers in the data as represented by the boxplot; A skewed value of 0.08 show that the data is evenly spread. More Closer the Skew metric towards zero, implies a normal distribution
+
+#### 2) Product Quality
+```{r}
+#overall summary of the variable
+summary(ProdQual)
+describe(ProdQual)
+
+#to check outliers 
+quantile(ProdQual, probs = c( 0.70,1.00))
+range(ProdQual)
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(ProdQual, col="blue")
+boxplot(ProdQual, col="darkgreen" ,horizontal = T, main="Boxplot of Product Quality")
+```
+
+Product Quality,independent variable, having 43 distinct values; with a mean of 7.71 and median of 8.00. Similar to Satisfaction, Product Quality also has a rating ranging from 5 to 9.9, which shows that almost all responders have given rating from *Fair* to *Excellent*. The data is spread evenly but has two peaks, which clearly indicates that 50% responders are ranging from 5.5 to 8.00 and another 50% responders ranging from 8.00 to 9.9, which in other words can be inferred, responders are rating from fair to very good and from very good to Excellent as there are 30% responders which have rated from 8.7 to 10.The Boxplot shows no outliers. 
+
+#### 3) E-commerce
+```{r}
+#overall summary of the variable
+summary(Ecom)
+describe(Ecom)
+
+#to check outliers 
+quantile(Ecom, probs = c( 0.90,0.99))
+range(Ecom)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(Ecom, col="blue")
+boxplot(Ecom, col="darkgreen" ,horizontal = T, main="Boxplot of E-commerce")
+```
+
+E-commerce,another independent variable has 27 distinct values. Mean is 3.67 and median is 3.6, with 75% of the data ranging lesser or equal to 3.925 indicates the responders not being very happy about the service. Data distribution is postively skewed as shown in the histogram and also presence of outliers. Kurtosis value of 3.64 indicates long tails at the end which also means presence of outliers at the right end.  
+
+#### 4) Technical Support
+```{r}
+#overall summary of the variable
+summary(TechSup)
+describe(TechSup)
+
+#to check outliers 
+quantile(TechSup, probs = c( 0.90,0.99))
+range(TechSup)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(TechSup, col="blue")
+boxplot(TechSup, col="darkgreen" ,horizontal = T, main="Boxplot of Technical Support")
+```
+
+Technical Support, the fourth independent variable, has 50 unique values, with a mean of 5.3 and median of 5.4, showing a even spread of the data. Standard deviation 1.53, which is 29% of the mean which shows that ratings have been given ranging from poor to very good. Responses haven't gone to excellent as 90% of the responders have rated 7.2 or lesser. No outliers present.  
+
+#### 5) Complaint Resolution
+```{r}
+#overall summary of the variable
+summary(CompRes)
+describe(CompRes)
+
+#to check outliers 
+quantile(CompRes, probs = c( 0.99,1))
+range(CompRes)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(CompRes, col="blue")
+boxplot(CompRes, col="darkgreen" ,horizontal = T, main="Boxplot of Complaint Resolution")
+```
+
+Complaint Resolution, indepedent variable with 45 distinct values, has a mean of 5.44 and Median of 5.45 and Standard deviation of 1.21. The is normally distributed with responses ranging from very poor to good, which can be interpretted seeing the minimum value which is 2.6 to Max value being 7.8. Outliers are not present from the boxplot. 
+
+#### 6) Advertising
+```{r}
+#overall summary of the variable
+summary(Advertising)
+describe(Advertising)
+
+#to check outliers 
+quantile(Advertising, probs = c( 0.80,0.99))
+range(Advertising)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(Advertising, col="blue")
+boxplot(Advertising, col="darkgreen" ,horizontal = T, main="Boxplot of Advertising")
+```
+
+Advertising,independent variable, has 41 unique values. The mean 4.01, median 4.00 and Std dev 1.13. Responses are ranging from highly not satisfied to OK, which can be interpretted from min value of 1.9 and max of 6.5. Skewness metric value being 0.04, which is very close to 0, shows the data is not skewed and boxplot also indicates of non presence of outliers.The top 20% decile of values also are not ranging beyond 6.3, which indicates the reponders are not very satisfied with the advertising of the product.  
+
+#### 7) Product Line
+```{r}
+#overall summary of the variable
+summary(ProdLine)
+describe(ProdLine)
+
+#to check outliers 
+quantile(ProdLine, probs = c( 0.99,1))
+range(ProdLine)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(ProdLine, col="blue")
+boxplot(ProdLine, col="darkgreen" ,horizontal = T, main="Boxplot of Product Line")
+```
+
+Product Line, mean and median have values similar i.e 5.8 and 5.75, which represents normally distributed data. The minimum value being 2.3 and Max value being 8.4 represents responses ranging from poor to very good; but noticing that 75% of data points are equal to or below 6.8, indicates poor to good satisfaction for the Product Line. This also indicates that responders have not shown an excellent or highly satisfied response.  
+
+#### 8) SalesForce Image
+```{r}
+#overall summary of the variable
+summary(SalesFImage)
+describe(SalesFImage)
+
+#to check outliers 
+quantile(SalesFImage, probs = c( 0.75,0.99))
+range(SalesFImage)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(SalesFImage, col="blue")
+boxplot(SalesFImage, col="darkgreen" ,horizontal = T, main="Boxplot of Salesforce Image")
+```
+
+Salesforce Image, independent variable has 35 unique values, with boxplots depicting clear outliers present. The mean(5.1) is slight higher than the median(4.9). The Standard Dev is 1.07 and is 17% of the mean, in other words the data is not very widely spread which can also be seen that almost 75% of the responses range lesser or equal to 5.8. This depicts the responders are closer towards being not very happy of the salesforce image.  
+
+#### 9) Competitive Pricing
+```{r}
+#overall summary of the variable
+summary(ComPricing)
+describe(ComPricing)
+
+#to check outliers 
+quantile(ComPricing, probs = c( 0.90,0.99))
+range(ComPricing)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(ComPricing, col="blue")
+boxplot(ComPricing, col="darkgreen" ,horizontal = T, main="Boxplot of COmpetitive Pricing")
+```
+
+Competitive Pricing attribute has 45 distinct values. Mean 6.97 and median 7.1 with standard deviation being 1.55, indicates the slight negative skewness. with third quartile and max ranging between 8.4 to 9.9 indicates that there are 25% responses which are highly satisfied with the competitve pricing.  
+
+#### 10) Warranty Claims
+```{r}
+#overall summary of the variable
+summary(WartyClaim)
+describe(WartyClaim)
+
+#to check outliers 
+quantile(WartyClaim, probs = c( 0.60,0.99))
+range(WartyClaim)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(WartyClaim, col="blue")
+boxplot(WartyClaim, col="darkgreen" ,horizontal = T, main="Boxplot of Warranty Claims")
+```
+
+warranty Claims,have responses ranging between 4.2 and 7.7, no outliers present as indicated by the boxplot. Mean and Median ranging with values 6.0 and 6.1 imples no skewness. 25% of the responses indicate a fair liking towards the attribute, also there more responses i.e. 40% responses ranging from 6.1 to 7.3 which is moving closer from fair to a good rating.
+
+#### 11) Order & Billing
+```{r}
+#overall summary of the variable
+summary(OrdBilling)
+describe(OrdBilling)
+
+#to check outliers 
+quantile(OrdBilling, probs = c( 0.80,0.99))
+range(OrdBilling)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(OrdBilling, col="blue")
+boxplot(OrdBilling, col="darkgreen" ,horizontal = T, main="Boxplot of Order & Billing")
+```
+
+Order and Billing variable has outliers present and is also evident With the kurtosis metric value to 3.17, indicates long tails.The coeff of variation being 22% of the mean indicates data is more dispersed. This can also be noticed from the min value being 2.00 and max value being 6.7. Though 75% of the responses are ranging between 2.5 to 4.8 indicates responders liking for this attribute is more towards fair. The maximum response moving higher towards excellent rating are also ranging between 5.0 and 6.5.  
+
+#### 12) Delivery Speed
+```{r}
+#overall summary of the variable
+summary(DelSpeed)
+describe(DelSpeed)
+
+#to check outliers 
+quantile(DelSpeed, probs = c( 0.95,0.99))
+range(DelSpeed)
+
+
+#plotting Histogram and Boxplot, for a better visualization
+par(mfcol= c(1,2), cex=0.7)
+hist(DelSpeed, col="blue")
+boxplot(DelSpeed, col="darkgreen" ,horizontal = T, main="Boxplot of Delivery Speed")
+```
+
+Delivery Speed has 30 distinct responses from the 100 responders. Boxplots and Kurtosis indicates outliers present on the left hand side of the mean, while the median is slight right with value being 3.9 as compared to 3.8 as the mean. 80% of the responses are ranging less or equal to 4.5,which indicates the responsders are highly unhappy as there are only 5% responders have rated a fair to delivery speed.  
+
+
+## BiVariate Analysis
+
+### Scatter Plots 
+
+```{r echo=FALSE}
+chart.Correlation(hair1, histogram = F, pch=15)
+```
+
+
+- Moderately linear relation between DelSpeed, ordBilling, SalesFImage & Product Line with Satisfaction is noitced, which means As the ratings of Delspeed increases, satisfaction increases too.
+- LikeWise, strong positive linear relation is noticed between Complaint Resolution and Satisfaction too.
+- Another relation between Order & billing and DelSpeed is also linear. As ratings in Order & billings increase, Delivery Speed ratings Increase too.  
+
+### Correlation 
+
+```{r echo=FALSE}
+
+corr_hair1=cor(hair1,method="p")
+corrplot(corr_hair1, method = "circle",addCoef.col = "white",
+         number.digits = 2, number.cex = 0.7, title ="Correlation Plot of All variables")
+```
+
+From the above plot,
+
+* Product Quality is moderately correlated with Product Line and Satifaction with coefficient 0.48 and 0.49 resp.
+* E-commerce is Highly positively correlated with SalesFImage; correlation Coeff of 0.79 and moderately correlated with Advertising
+* TechSup is highly positively Correlated with wartyClaim at 0.80 coeff  
+* Complaint Resolution is positively correlated with Ordbilling, DelSpeed, & Satisfaction at 0.76, 0.87 and 0.60 resp.
+* Product Line is in correlation with Delivery Speed and Satisfaction with coefficient 0.60 and 0.55 resp.
+* Ord Billing is correlated with DelSpeed 0.75 and Satisfaction 0.52  
+
+Evidence of multicollinearity: From the correlation plot, this shows that since there are high and moderate correlation between some of the variables, is an evidence that multicollinearity is present.Also, we shall run simple linear regression between the Independent Variable and Dependent Variable to understand how every variable impacts Satisfaction ratings.  
+
+
+## Simple Linear Regression
+
+```{r}
+#Satisfaction is function of Product Quality
+Model1=lm(Satisfaction~ProdQual)
+summary(Model1)
+anova(Model1)
+```
+
+#### Interpretation  
+
+Model1 is Satisfaction is a function of Product Quality.  
+
+ __To put this in an equation: Satisfaction= 3.675 +0.415*ProdQual__  
+
+
+If the Ratings in Product Quality increases by one unit(in this case by 1 additional rating), the Satisfaction rating will increase by 0.41.
+
+From this model, the Product quality is significant with a p-value being as low as 2.901e-07. Product Quality explains only 23.65% of the variablity of the response variable Satisfaction, which can be interpretted from *Multiple R Sqd* metric, whereas the *Adjusted R squared* is R squared after adjusting the degrees of freedom i.e 99(Regression)/98(residuals) from the Multiplier Effect. 
+
+The Hypothesis for F-Test for significance can be constructed as –
+Null Hypothesis: The fit of intercept only model and the current model is same. i.e. Additional variables do not provide value taken together
+Alternate Hypothesis: The fit of intercept only model is significantly less compared to our current model. i.e. Additional variables do make the model significantly better.
+
+F Statistic is  30.36 on 1 and 98 DF, whose P-value is 2.901e-07, is extremely small i.e. smaller than 0.05 alpha level, so we can interpret that the variable is significant and a strong contributor to the response variable which if otherwise, would have been an intercept only model without any variable.   
+
+```{r}
+#Satisfaction as function of Ecom
+Model2=lm(Satisfaction~Ecom)
+summary(Model2)
+anova(Model2)
+```
+
+Likewise, Model2 represents Satisfaction as a function of E-commerce.
+
+To interpret the model, with every unit increase in the ratings of E-commerce, the satisfaction rating will increase by 0.48 ratings.  
+
+The pvalue for Ecom is 0.00437 which is significant at 5% alpha level.  
+
+From the R sqd, E-commerce explains only 0.079 or 7.9% of the variablity in Satisfaction ratings.  
+
+```{r}
+#Satisfaction is function of TechSup
+Model3=lm(Satisfaction~TechSup)
+summary(Model3)
+anova(Model3)
+```
+
+Model3 represents Satisfaction = 6.447 + 0.0876*TechSup
+
+P-value is large at 0.2647,hence this means that  model is not significant. 
+Technical Support is not significant at 5% alpha level.Also, notice, the R-sqd value is very less 0.012 which is around 1.2% variability to Satisfaction.  
+
+```{r}
+#Satisfaction is a function of CompRes
+Model4=lm(Satisfaction~CompRes)
+summary(Model4)
+anova(Model4)
+```
+
+Model4 represents Satisfaction as a function of Complaint Resolution.
+
+With p-value being as low as 3.085e-11, meaning the model is significant with addition of variable other than the intercept. Complaint resolution is a highly signifact predictor for Safisfaction with a pvalue of 3.09e-11. Overall, Complaint resolution ratings contribute to 0.36 or 36.3% of the changes that happen in Satisfaction ratings. 
+
+To interprest the coeff, if the ratings in Complaint Resolutions increase by 1 unit, the Satisfaction ratings will increase by 0.594 ratings.  
+
+```{r}
+#satisfaction is function of Advertising
+Model5=lm(Satisfaction~Advertising)
+summary(Model5)
+anova(Model5)
+```
+
+Advertising is significant with a pvalue of 0.00206, and it explains 0.083 or 8.3% of the variance in Satisfaction ratings.The FStatistic is significant at 0.002056 p-value. with every unit (one rating)increase in Advertising, the Satisfaction rating will increase by 0.322 ratings.  
+
+
+```{r}
+#Satisfaction as a function of ProdLine
+Model6=lm(Satisfaction~ProdLine)
+summary(Model6)
+anova(Model6)
+
+```
+
+Product Line turns out to be a significant predictor with coefficient estimates 0.49887 and p-values of 2.95e-09.
+The Adjusted R-Sqd is 0.296 implying 29.6% of variance in the response variable is explained by Product Line. Noticing the F-stat, implies the model is significant with a p-value of 2.953e-09.
+If there is a unit increase in Product Line ratings, there will be a positive increase by 0.49887 ratings in customer satisfaction  
+
+```{r}
+#Satisfaction as a function of SalesFImage
+Model7=lm(Satisfaction~SalesFImage)
+summary(Model7)
+anova(Model7)
+```
+
+Coefficient estimates of Sales force Image is 0.5559 which is a very significant predictor for the response variable. Notice that the Adjusted R-SqD is 0.242 which means 24.2% of the variation can be explained by Sales force Image.  
+
+```{r}
+#Satisfaction as a function of ComPrising
+Model8=lm(Satisfaction~ComPricing)
+summary(Model8)
+anova(Model8)
+```
+
+Competitive Pricing, is a less significant predictor with a p-value of 0.0376; the variable also has negative relation with satisfaction, which means with every increase of Competitive Pricing rating by 1 rating, the Satisfaction ratings will decrease by 0.16068 ratings. F-Stat at 4.445 on 1 and 98 DF is a less significant model with p-value of 0.03756. Overall the Adj R-Sqd in also not very high, indicating the ComPricing as a predictor variable constitutes around 3.3% of variation in Satisfaction.
+
+```{r}
+#Satisfaction as a function of WartyClaim
+Model9=lm(Satisfaction~WartyClaim)
+summary(Model9)
+anova(Model9)
+```
+
+Warranty & Claims, as a predictor variable is not very significant at 0.05 alpha.Notice, the overall model p-value is also large, which indicates the addition of warranty & Claims doesn't make a significant change in Customer Satisfaction rating, which is also backed by the Adj R-Sqd which is 0.02164, signifying only 2.1% of variation can be explained by Warranty & Claims ratings.  
+
+```{r}
+#Satisfaction as a function of ordbilling
+Model10=lm(Satisfaction~OrdBilling)
+summary(Model10)
+anova(Model10)
+```
+
+Order & Billing, is a significant predictor with p-values as low as 2.60e-08 and coefficient estimates 0.6695. This implies that with every increase in ratings of Order & Billing by 1 rating, the Satifaction rating will increase by 0.6695 ratings. F statistic 36.95 on 1 and 98 DF are significant at p-value  of 2.602e-08, hence we reject the null hypothoesis in favour of alternate to conclude that addition of Order & billing has significantly improved the ratings in response variable.
+
+```{r}
+#Satisfaction as a function of DelSpeed
+Model11=lm(Satisfaction~DelSpeed)
+summary(Model11)
+anova(Model11)
+```
+
+Delivery Speed as noticed from the correlation plot, has a strong relationship with Satisfaction ratings. Similarly, in the model too, with every unit increase in Delivery Speed, the Satisfaction ratings increase by 0.936 units(ratings). The model is highly significant which can be seen from the low p-values 3.3e-10 and with the Adj R Sqd of 0.32 or 32.62% of variance in Satisfaction can be explained by Delivery Speed.  
+
+
+
+## Multiple Linear Regression
+
+After running a linear regression with all independent variables and Customer Satisfaction, We will now run a Multiple Linear Regression. Overall, The linear regression did indicate the relation ship of independent variables individually to Customer satisfaction, where as correaltion coefficient indicated the relation between all variables and if they were correlated or no, however, the correlation coeff cannot determine the significance of combination of independent variables to overall Customer Satisfaction and hence, we perform a multiple regression.  
+
+Satifaction is a function of all the variables namely - Prod Qual, ECom, Tech Sup, CompRes, Advertising, ProdLIne, SalesfiMage, ComPricing, WartyClaim, OrdBilling & DelSpeed
+```{r}
+Model_MLR= lm(Satisfaction~., data=hair1)
+summary(Model_MLR)
+coefficients(Model_MLR,digits=3)
+```
+
+#### Findings:
+
+The Model can be explained in the mathematical equation as  
+
+__Yhat(Satisfaction)= -0.6696 + 0.3713*ProdQual -0.440*Ecom + 0.0329*TechSup + 0.167*CompRes - 0.0260*Advertising +0.140*ProdLine +0.806*SalesfImage -0.0385*comPricing-0.102*WartyClaim +0.146*OrdBilling +0.165*Delspeed__
+
+Interpretation of the above equation would be,
+  * Intercept term on Beta zero is constant in regression, which  in other words means here, that in absence of any predictor variable, the dependent variable customer Satisfaction will only decrease by 0.6696;  
+  
+  * If there is a unit increase in Product Quality i.e. an increase in ratings of Product Quality by 1, the ratings of satisfaction will increase by 0.371, keeping all other variables constant;  
+  
+  * Likewise, for every increase in E-Commerce rating by 1, the Satisfaction rating will decrease by 0.440 ratings, provided all other variables are constant and similarly all the variables can be interpretted with the positive increase in Satisfaction for every positive coefficient of the independent variables keeping all other variables constant; 
+  
+  * From the Model- ProdQual, Ecom and SalesFImage are highly Significant variables including ProdLine which is less significant at 5% alpha level.Noticing, the Multiple R sqd, which is 0.8021 or 80.21% of the variations in satisfaction can be explained by these variables. In other words, looking at the Adjusted R Squared around 77.7% of the variance in the dependent variable (Satisfaction) can be explained by only the 3 independent variables from the model,which also implies that there is **high multicollinearity**,because if higher variance is explained by lesser number of predictor variables in the model for the response variable, it implies that there is multicollinearity and that some variables need to be dropped or combined to understand and explain the model better.  
+  
+To further understand and detect multicollinearity, the folliwing methods can be tested: 
+    * a) Correlation Matrix (which is done above)
+    * b) Variance Inflation Factor (VIF),by definition is the measure the inflation in the variances of the regression parameter estimates due to collinearities that exist among the predictors.Hence variables with VIF of greater than 5, should be dropped. A VIF of 1 or less means there is no correlation between the predictors.  
+    
+```{r}
+anova(Model_MLR)
+vif(Model_MLR)
+```
+
+DelSpeed has a high VIF of 6.51, followed by CompRes 4.73. We shall drop DelSpeed and then re run the model
+```{r}
+#dropping DelSpeed
+Model_MLR1=lm(Satisfaction~ProdQual+Ecom+TechSup+CompRes+Advertising+ProdLine+SalesFImage+ComPricing+WartyClaim+
+                OrdBilling,data=hair1)
+summary(Model_MLR1)
+vif(Model_MLR1)
+```
+
+After dropping the predictor, DelSpeed, the model now indicates ProdQual, Ecom, CompRes, ProdLine & SaleFiMage are showing p-values significant at 5% alpha level; Adjusted R Sqd value is ).7781, which explains that 77.81% of the variance in response variable Satisfaction is now explained by 5 predictors.with a pvalue of 2.2e-16 which is low, the model is highly significant at 5% alpha, implying to the fact that additional of variables have made the model better.
+
+Notice, that the VIF of variables- ProdQual,Compres,Advertising have dropped too;but there is still high VIF values for variables-SalesFImage, WartyClaims and CompRes.we shall now run the model after dropping SalesFimage and see the impact.
+
+```{r}
+#dropping SalesFImage
+Model_MLR2=lm(Satisfaction~ProdQual+Ecom+TechSup+CompRes+Advertising+ProdLine+ComPricing+WartyClaim+
+                OrdBilling,data=hair1)
+summary(Model_MLR2)
+vif(Model_MLR2)
+```
+
+From this model, at 5% alpha, there are only 4 significant variables namely ProdQual, Ecom, Compres and Advertising which also imapct the Adjusted R-Squared reducing it to 0.608, or 60.8% variance in Satisfaction is explained by these 4 predictor variables.
+
+Though VIF of CompRes has further reduced from 3.278 to 3.132 and wartyClaims have also reduced to 3.07, but dropping or removing predictor variables means also loosing out on important data, which, is not an ideal solution, this informs to take another measures like *Factor Analysis* or *dimension reduction techniques*,  which is used where the highly correlated variables can be combined as components and be involved in the multiple regression.
+```{r}
+#dropping CompRes
+Model_MLR3=lm(Satisfaction~ProdQual+Ecom+TechSup+Advertising+ProdLine+ComPricing+WartyClaim+
+                OrdBilling,data=hair1)
+summary(Model_MLR3)
+vif(Model_MLR3)
+```
+
+After removing CompRes,the model now has- ProdQual, Ecom,Advertising, ProdLine and OrdBilling as significant predictors.Notice that, the Adjusted R-Sqd has further reduced to 0.565 from 0.608 from the previous model, which means that 5 signficant predictors explain around 56.5% of the change in the response variable.This model has increased the predictors but reduction in Adjusted R sqd, impacts the explainability in the variance of the response variable.
+Thus, to conlude, Other measures like dimesnion reduction techniques - PCA or Factor Analysis have to be considered.  
+
+## Principal Component Analysis/Factor Analysis  
+
+PCA or Factor Analysis is performed to combine one or more correlated variables into common factors or components. An important point to remember is while doing the Factor Analysis, the response variable is not to be considered. This analysis is done on the predictor variables to reduce their dimension or correlation while maitaining the original nature of the variable. 
+
+In order to do the PCA, we will first create a subset of the data without the response variable (Satisfaction)and keeping all the predictor variables.  
+```{r}
+#removing Satisfaction from the data set
+hairIV=hair1[,-12]
+
+#checking the means of all the variables
+round(colMeans(hairIV),2)
+
+#variance covariance matrix
+round(var(hairIV),2)
+```
+
+A Covariance matrix,is run to understnad if there is a high variance amongst variables, for e.g.Checking on a diagonal scale, ProdQual has variance 1.95, whereas Ecom has 0.49 and Tech Sup has 2.39.When sample variances of the original variables show differences by large order of magnitude, variables need to be normalized or scaled. PCA is then performed on the scaled variables rather than the original variables.  
+
+```{r}
+#Scaling the variables from the dataset
+std.hair=scale(hairIV)
+
+head(std.hair)
+
+#new covariance matrix
+round(var(std.hair),2)
+```
+
+This covariance matrix for the scaled variables shows that daiogonal amongst variables as 1 and this is similar to the correlation matrix produced above.
+
+```{r echo=FALSE}
+#pairs plot to understand correlation between scaled predictor variables
+pairs(std.hair, pch=19, col=c("dark blue","dark green","magenta","navy"), cex=0.6)
+```
+
+When there is high correlation, amongst the predictor variables, this will give the collinearity effect. To further reduce this,data can then be segregated under components and factors based on their correlation.  
+
+##### KMO Statistic & MSA test  
+
+* The Kaiser-Meyer-Olkin (KMO) statistic is a test which is performed to understand if there is scope of dimension reduction in the data.High dimension reduction is possible when there are a lot of variables available as predictors and when they are highly collinear.  
+
+* Measure of Sample Adequacy (MSA) test which measure the degree of interconnections among all the variables and the appropriateness amongst the factors. The MSA metric ranges between 0 and 1, where if the metric is greater than 0.5, implies factor Analysis can be conducted. MSA increases when either the average sample size increases, the correlations between variables increase or the total number of variables increases.
+```{r}
+#check of KMO statistic - Measure of Sampling Adequacy MSA>0.5, then FA should be performed on variables
+
+KMO(cor(std.hair))
+```
+KMO is greater than 0.5 for most of the variables, hence FA can be conducted.  
+
+```{r}
+#Cortest Barlett Sprehericity Test
+
+cortest.bartlett(cor(std.hair),n=100, diag=T)
+```
+
+Since the p value 1.79337e-96 is very small, hence performing the FA is useful.  
+
+```{r}
+#PCA on std.hair
+pc.hair= prcomp(std.hair)
+summary(pc.hair)
+```
+
+Running the Prcomp() function on the scaled variables, we get output as :the standard deviation, Proportion of Variance and Cumulative Proportion.  
+
+The proportion of variance of a principal component is obtained by dividing the variance of the component (obtained by squaring the standard deviation), by total variance, for eg. in PC1, 0.31 which is square of 1.8512 divided by total number of variables, will deliver 0.3115;
+
+Cumulative Proportion can be explained as the sum of the propotions upto the *Kth* principal component;  
+In this case, If k=4, the cumulative proportion is 0.7959 or 79.59%, which can also be explained as though there are 11 variables, if only 4 Principal compenents are to be considered, 79.5% of the total variance can be explained by these 4 components, hence instead of 11, we can reduce the dimension of features by using 4 prinicpal components.
+
+#### Scree Plot and Kaiser Normalization Rule  
+
+```{r}
+# Obtain a Screen Plot
+screeplot(pc.hair, type= "lines", main="Screen Plot of Pc.hair")
+```
+
+A *scree plot*, helps in generating optimal number of factors and by using the kaiser rule, we shall consider where Eigen Values are greater or equal to 1 or breaks in the plot (elbow-break), hence we can see from the plot that 4 factors can be considered as post that the eigen value are decreasing than 1.In other words, number of factors with more than 4, have a very small or no contribution to the explainability of total variance, or would not further create a greate effect in the dimension reduction.
+
+```{r}
+ev = eigen(cor(std.hair)) # get eigenvalues
+ev
+EigenValue=ev$values
+EigenValue
+```
+
+By defintion, Eigenvalue is a number that tells us how the data set is spread out on the line or coordinates which is an Eigenvector.  
+
+Once the optimal number of factors are decided from the scree plot, the Factor Loadings have to be generated from the unrotated or rotated loadings.  
+
+Factor loadings are the correlation coeff scores which determine the strength of relationship between variables in each factor.These scores range from -1 to +1.Higher scores or scores closer towards 1, (without considering the score sign), shows a stronger relationship of every variable within that component/factor.
+
+In order to examine the factor loadings from Unrotated loadings:
+
+```{r}
+#Unrotate factor Loadings
+Unrotate=principal(std.hair,nfactors= 4,rotate="none")
+print(Unrotate,digits=2)
+```
+
+##### Interpretation of Factor Loadings:
+
+ * In the above table, the first four columns PC1, PC2, PC3 and PC4 have the factor loadings of each variable under the different prinicpal Components. 
+ * "h2" or Communality is the total variance of the original variable explained combining the factors. 
+ * "u2" is the unexplained variance or error term or residual of the original variable which cannot be captured in the 4  components.
+ 
+To explain further,the total variance of ProdQual captured by the 4 factors, is 0.768 or 76.8%, where as 23.2% is unexplained. likewise, its similar for other 10 variables. The vertical summation of squares of Principal components is the Eigen values and the Horizatal summation of the squares of PCs is Communality.  
+```{r}
+UnrotatedProfile=plot(Unrotate,row.names(Unrotate$loadings))
+```
+
+Upon futher assessing the table and unrotated Plot, we can see, that the first PC has DelSpeed, CompRes, ordBilling and ProdLine have the maximum factor loadings, similarly, PC2 has SalesFimage, Advertising, ECom, & ComPricing are the highest factor loadings, PC3 has wartyClaims and TechSup, whereas PC4 has prodQual. 
+To form the equation:
+PC1 = 0.248*SProdQual+0.307*SEcom+0.292*STechSup+0.871*SCompRes+0.34*SAdvertising+0.71*SProdLine+0.377*sSalesFImage-0.28*SComPricing+0.39*SWartyClaim+0.809*SOrdBilling+0.876*SDelSpeed;with a prefix of S before each variable, means the loadings by Scaled variables.  
+
+Inorder to get a uncorrelated picture amongst all variables, "VARIMAX" or Orthogonal rotated factor loadings is performed, this is done to get a better picture of the clusters based on the correlations between variables.
+```{r}
+#Rotate Factor Loadings
+Rotate4=principal(std.hair, nfactors=4,rotate="varimax")
+print(Rotate4,digits=2)
+
+
+plot(Rotate4,row.names(Rotate4$loadings))
+
+#to check the uncorrelated daigonal across all factors
+factor.scores(std.hair,f=Rotate4$loadings, method = "Harman")
+```
+To visualize the Eigenvalues under different factors in a daigram
+```{r echo=FALSE}
+fa.diagram(Rotate4)
+```
+
+```{r}
+#to understand if 5 factors are considered, the impact on communality
+Rotate5=principal(std.hair,nfactors=5,rotate="varimax")
+print(Rotate5,digits = 3)
+
+RotatedProfile=plot(Rotate5,row.names(Rotate5$loadings),cex=1.0)
+```
+
+From the above plot and tables,Advertising is considered as the 5th Factor;But since the communality captured is less than 40% of the variance,hence to conclude,we would not consider to take 5 factors. Also seen from the scree plot and as per the Kaise rule, Eigen values less than 1 should not be considered.  
+
+#### Labelling Factors 
+
+
+
+## Multiple Linear Regression with Dependent Variable and Factors
+
+```{r}
+#Running the Multiple Linear regression with Satisfaction and factor scores (factor) for the 4 PCs
+regdata <- cbind(hair1[12], Rotate4$scores)
+
+#Labeling the data
+names(regdata) <- c("Satisfaction", "Billing_Logistics", "Marketing",
+                    "AfterSales_Service", "Product")
+head(regdata)
+```
+
+```{r}
+#Splitting the data 70:30
+set.seed(123) #to not pick random numbers everytime the code is run.
+index= sample(1:nrow(regdata), 0.7*nrow(regdata))
+train=regdata[index,]
+test = regdata[-index,]
+```
+
+```{r}
+#Running the model with train data
+reg_model=lm(Satisfaction~., data=train)
+summary(reg_model)
+vif(reg_model)
+```
+
+#### Interpretations : 
+
+ * Running the regression model with Satisfaction as a function of the 4 factors namely BIlling_Logistics, Marketing, AfterSales_Service & product results in a pvalue of 2.204e-14. Considering the F statistic 30.8 on 4 and 65 DF, states that my model is significant at 5% alpha.
+
+ * The Multiple R-Sqd is 0.6546 and Adjusted R-Sqd is 0.633 or 63.33% of the variance in satisfaction can now be explained by the combined 4 factors.  
+ 
+ * The model overall looks a fair model, upon checking the VIF, all the 4 factors as predictors have a VIF of 1, which means they are not correlated  anymore or non collinear.  
+ 
+ * From the model, Billing_Logistics, Marketing and Product are Highly Significant predictors and the equation formed would be Satisfaction = 6.870(Intercept)+0.569*Billing_Logistics+0.563*Marketing+0.114*AfterSales_Service+0.505*Product,  
+ 
+ * To explain the model coefficients, with every unit increase in Billin_logistics ratings, the Satisfaction ratings will increase by 0.569 ratings keeping other predictors constant.Also notice, in this model, all the variables now have positive effect on satisfaction. as there areno negative coefficient estimates.  
+ 
+ * Since AfterSales Service is not a signifacnt varibale, we shall drop this and run a second model to see if the adjusted R sq further imporoves.  
+ 
+```{r}
+#Model Performance metrics:
+library(Metrics)
+#Model 1:
+pred_test1 <- predict(reg_model, newdata = test, type = "response")
+pred_test1
+
+#Find MSE and MAPE scores:
+#MSE/ MAPE of Model1
+test$Satisfaction_Predicted <- pred_test1
+head(test[c(1,6)], 10)
+
+test_r2 <- cor(test$Satisfaction, test$Satisfaction_Predicted) ^2
+
+mse_test1 <- mse(test$Satisfaction, pred_test1)
+rmse_test1 <- sqrt(mse(test$Satisfaction, pred_test1))
+mape_test1 <- mape(test$Satisfaction, pred_test1)
+model1_metrics <- cbind(mse_test1,rmse_test1,mape_test1,test_r2)
+print(model1_metrics, 3)
+```
+
+```{r}
+#Model2 without AfterSales Service
+reg_model1=lm(Satisfaction~Billing_Logistics+Marketing+Product, data=train)
+summary(reg_model1)
+vif(reg_model1)
+
+#Model 2:
+pred_test2 <- predict(reg_model1, newdata = test, type = "response")
+pred_test2
+
+#MSE/ MAPE of Model1
+test$Satisfaction_Predicted2 <- pred_test2
+head(test[c(1,6)], 10)
+
+test_r2 <- cor(test$Satisfaction, test$Satisfaction_Predicted2) ^2
+
+mse_test2 <- mse(test$Satisfaction, pred_test2)
+rmse_test2 <- sqrt(mse(test$Satisfaction, pred_test2))
+mape_test2 <- mape(test$Satisfaction, pred_test2)
+model2_metrics <- cbind(mse_test2,rmse_test2,mape_test2,test_r2)
+print(model2_metrics, 3)
+```
+
+```{r}
+#comparing both the model metrics
+Overall <- rbind(model1_metrics,model2_metrics)
+row.names(Overall) <- c("Test1", "Test2")
+colnames(Overall) <- c("MSE", "RMSE", "MAPE", "R-squared")
+print(Overall,3)
+```
+
+Mean Squared error(MSE), Root mean Squared Error(RMSE), Mean Absolute Percentage error(MAPE) are metric values which measure the model performance, in a way it compares the residual errors after performing the model on the actual and predicted data.
+
+```{r}
+# Running a third model with Interaction of the factors to udnerstand if it improves the model.
+reg_model2=lm(Satisfaction~Billing_Logistics+Marketing+Product+
+                Billing_Logistics*Marketing+
+                Billing_Logistics*AfterSales_Service+
+                AfterSales_Service*Marketing, data=train)
+summary(reg_model2)
+vif(reg_model2)
+```
+
+The interaction of predictors are not significant as per the model,neither have they improved the Adjusted R-sqd. Hence, we conclude, that the second model without After Sales Service is a better model as the Adjusted R Sqd is higher around 64.3% and MSE metric is lesser, which means the model is fitting the actuals and residuals better than the first model.
+
+##### Checking the assumptions :
+
+ 1)Linear RelationShip: residual Vs Fitted plot displays the non linear relationship, though there is a slight curvy pattern noticed, but the residuals are plotted evenly all around.  
+ 2)Homoscadasticity:This plot test the linear regression assumption of equal variance (homoscedasticity) i.e. that the residuals have equal variance along the regression line. It is also called the Spread-Location plot.  
+ 3)Normality: Residuals should be normally distributed and the Q-Q Plot will show this.If residuals follow close to a straight line on this plot, it is a good indication they are normally distributed.  
+ 4)No Auto Correlation: This plot can be used to find influential cases in the dataset.An influential case is one that, if removed, will affect the model so its inclusion or exclusion should be considered.  
+
+```{r echo=FALSE}
+par(mfrow = c(2,2))
+plot(reg_model1)
+
+#dev.off()
+```
+
+## Conclusion  
+
+The Hair Data, which is a ratings data of 100 responders giving their ratings on the different parameters for a market segmentation study. 
+
+In order to understand all the parameters, Univariate Analysis was performed and from which it was seen that parameters were all numeric and did not have any missing or zero values. Outliers are seen for variables E-com, SalesFImage, OrdBilling and DelSpeed.
+
+Running the Bi-variate Analysis & Correlation plots and Linear Regression individually, strong correlations amongst variables(0.8 & above), Techincal Support & Warranty Claims, Delivery Speed & Complaint resultion; while moderate Correlation amongst variables E-commerce and Salesforce Image, Order& billing and CompRes, Product Line and COmpRes was noticed.Importantly there is moderate correlation between the response variable Satisfaction and predictor variables CompRes, ProdLine OrdBilling, DelSpeed & salesFImage too.
+
+In order to solve Multi-Colinearity which was evident from correlation and VIF, Principal Component Analysis was conducted, which eventually basing on screeplots, factor loadings, communality and error term concluded to 4 major factors namely Billing & Logistics, Marketing, AfterSales service and Product. 
+
+Finally, Multiple Linear regression  models were run with the four factors and Customer Satisfaction as a Response variable to regress and predict the Satisfaction ratings while the presence of factors. Train and test data with the ratio of 70:30 was followed and based on MSE, RMSE & Adjusted R Sqd metrics, the model which performed best was chosen. The  four assumptions required while running a linear regression was also followed to see the actual and the fitted line were best fit.
+
+
+
+### Sources for the Report:  
+
+Links used to create the report in terms of creating the markdown document, plots and related adjustements, tables on univariate and bi variate analysis, to better understand outputs and terms are given below;  
+
+Anderson Sweeney Williams pdf 
+(https://livebook.datascienceheroes.com/exploratory-data-analysis.html#dataset-health-status)
+(https://towardsdatascience.com/simple-fast-exploratory-data-analysis-in-r-with-dataexplorer-package-e055348d9619)
+(https://statisticsbyjim.com/glossary/standard-error-regression/)
+(https://davidgohel.github.io/flextable/articles/overview.html)
+(https://stackoverflow.com/questions/50631646/saving-a-correlation-matrix-graphic-as-pdf)
+(https://stats.stackexchange.com/questions/5135/interpretation-of-rs-lm-output)
+(https://www.theanalysisfactor.com/interpreting-the-intercept-in-a-regression-model/)
+
+
+

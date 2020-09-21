@@ -1,0 +1,763 @@
+---
+title: "Thera Bank Case Study"
+author: "Anupama"
+date: "16/05/2020"
+output: word_document
+---
+
+
+```{r}
+
+toload_libraries <- c("reshape2", "rpsychi", "car", "psych", "corrplot", "forecast", "GPArotation", "psy", "MVN", "DataExplorer", "ppcor", "Metrics", "foreign", "MASS", "lattice", "nortest", "Hmisc","factoextra", "nFactors")
+#new.packages <- toload_libraries[!(toload_libraries %in% installed.packages()[,"Package"])]
+#if(length(new.packages)) install.packages(new.packages)
+lapply(toload_libraries, require, character.only= TRUE)
+library(funModeling)
+library(Hmisc)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+library(PerformanceAnalytics)
+library(nFactors)
+library(psych)
+library(flextable)
+library(officer)
+library(GGally)
+library(rpart.plot)
+library(rpart)
+library(caTools)
+library(rattle)
+library(data.table)
+library(ROCR)
+
+```
+
+# Introduction
+
+**Thera Bank** has a growing customer base. The bank has a majority of customers that are liability customers (depositors) with varying size of deposits. The bank is not looking to into expanding its base rapidly to bring in more loan business and in the process, earn more through the interest on loans. In particular, the management wants to explore ways of converting its liability customers to personal loan customers (while retaining them as depositors). For this, The Bank ran a last year for liability customers and that showed up a healthy conversion rate of over **9%** success.   
+
+In order to further build a model that will help them identify the potential customers who have a higher probability of purchasing the loan, The bank has provided a data on 5000 customers.The data includes customer demographic information (age, income, etc.), the customer's relationship with the bank (mortgage, securities account, etc.), and the customer response to the last personal loan campaign (Personal Loan). Among these 5000 customers, only 480 (= 9.6%) accepted the personal loan that was offered to them in the earlier campaign.   
+
+## Problem Statement  
+The Bank has to build a model in a way that will increase the success ratio by targetting the right customers while at the same time be make it a very cost- effective campaign.    
+
+### Description of the Data  
+```{r echo=FALSE}
+
+
+#reading the data from excel
+thera1=readxl::read_excel("Thera Bank_dataset.xlsx",sheet = 2)
+
+head(thera1)
+thera1= as.data.frame(thera1)
+
+#renaming the column names for ease
+names(thera1)[2]="AgeinYears"
+names(thera1)[3]="ExpinYears"
+names(thera1)[4]="IncomePerYear"
+names(thera1)[5]="ZipCode"
+names(thera1)[6]="FamilyMembers"
+names(thera1)[7]="CCAvgSpends"
+names(thera1)[8]="EducLevel"
+names(thera1)[9]="MortValue"
+names(thera1)[10]="PersonalLoan"
+names(thera1)[11]="Securities"
+names(thera1)[12]="CDAcc"
+names(thera1)[13]="OnlineUsage"
+names(thera1)[14]="CCUsage"
+```
+
+```{r echo=FALSE}
+#Checking for the str of the data
+str(thera1)
+```
+
+The dataset has 5000 observations and 14 variables. All these variable are set as numeric. Hence, we will need to change and fix the data type for variables that are categorical and continous. To describe the variables:  
+
+1. ID: Customer ID which is Numeric with 5000 Observations. Though this would be dropped further as its not useful in the analysis.  
+2. Age: Customer's Age, numeric variable with a minimum age of 23 and maximum age being 67 years. The mean and Median are 45 years, which indicates that 50% of customers are below or equal to 45 years.  
+3. Experience: Customer's Professional Experience, ranging from -3 to 43 years. This could also be interpretted as there are customers who are either students or dependents who are not earning and hence, the minimum years is negative. Again, the the mean and median is 20, which indicates that 50% are having 20 years of experience.  
+4. Income: Income is yearly income in Dollars ranging from $8,000 to $2,24,000. Atleast 50% of the customers are earning equal to or less that 64,000 dollars a year, but with a mean of 73,000 dollars, this implies the data is skewed and there could be outliers, which will be evaluated by boxplots further.
+5. ZipCode: Postal Code of all members, has 467 unique values, which would mean that customers are located at these 467 different locations.
+6. FamilyMembers: Total Number of Dependents. This variable has NA's and will have to treat the missing values further.
+7. CCAvgSpends: Monthly Average Spends in thousands done by customers using a credit card. This ranges between 700 to 10,000 dollars per month. Note, that there are *zeros* which could also mean that customers don't have a credit card or believe in cash spends than credit. 
+8. Edulevel: Education Levels is basically tagged as Undergraduate, Graduate and Advanced as 1,2,3 respectively.   
+9. Mortgage Value : Customers if they have mortgaged house and their value if any. The summary depcits that there are a lot of outliers in this variable, which can be further analysed.
+10. Personal Loan: Whether the customer accepted the Personal Loan in the campaign offered last year. This is also are **Target** or **Response** Variable. This has two levels 1's and 0's. Customer who accepted the loan are 1's rest are 0's.
+11. Securities: Customers who have a securities account with the bank and factor levels of 1's and 0's. 
+12. CDACC: Customers who have a certificate of Deposit with the bank, with factor levels of 1's and 0's.
+13. Online Usage: Customers who use internet banking facilities of the bank set as 1's and 0's for those who dont use the services.
+14. CCUSage: Customers who use the Bank issued credit card with factor levels of 1's and 0's.  
+
+### Exploration of the Data  
+```{r echo=FALSE}
+
+
+#Changing variables- ZipCode, Family members, Edulevel, personal Loan(target), Securites, CDACC, Online Usage & CCUsage as factors
+thera1$ZipCode= as.factor(thera1$ZipCode)
+thera1$FamilyMembers=as.factor(thera1$FamilyMembers)
+thera1$EducLevel=as.factor(thera1$EducLevel)
+thera1$PersonalLoan= as.factor(thera1$PersonalLoan)
+thera1$Securities= as.factor(thera1$Securities)
+thera1$CDAcc=as.factor(thera1$CDAcc)
+thera1$OnlineUsage=as.factor(thera1$OnlineUsage)
+thera1$CCUsage=as.factor(thera1$CCUsage)
+
+summary(thera1)
+```
+
+Variables *ZipCode*, *FamilyMembers*, *EducLevel*, *Securities*, *CDAcc* or *Certificate of Deposit Holders*, *OnlineUSage* and *CCCUsage* are categorical variables. These predictor varaibles have levels and are set as factors. Post setting them as factors, we can analyse the different levels under each variable to understand the persona of a customer better.
+**Personal Loan**, which is the response variable is also set as a factor because it has only two levels - Customers who accepted the Personal Loan are set as **"1"** and Who have not accepted are set as **"0"**. Notice, after changing the data type as factor for Personal Loan, the customers who have bought is 480 which is 9.6% same as success ratio informed prehand by the Bank.  
+
+#### Profiling of Continous or Numeric Variables
+```{r echo=FALSE}
+#to check the overall profiling of all numeric variables
+
+theraCentraltend=profiling_num(thera1[,-1])
+autofit(flextable(theraCentraltend))
+```
+
+#### Inference from the above table  
+* Variable Age, Experience are evenly distributed with 50% of customers having age less or equal to 45 years, whereas the data indicates that almost 70% of customers have an professional experience above or equal to 10 with max upto 41 years. Experience variable has negative values, which needs to be treated.
+* Income with a skewness value of 0.84 which is closer to 0 indicates a normal distribution, but there could be outliers as Kurtosis value of 2.95 and the indication of 75% of the customers income ranges between 10,000-98,000 Dollars with a *p_95* and *p_99* ranging between 173,000 to 193,000 dollars.  
+* Credit Card Spends also shows a high kurtosis of 5.64 which indicates positive skewness with only the top 5 percentile of *p_95* and *p_99* being 6000 to 8000 dollars  average spends per month.
+* Mortgage Value has a very high spread looking at its standard deviation which 101.72 and mean value being 56.4.The Kurtosis indicates tails at the ends and with 7.71, this clearly shows outliers in this variable. Also,this has highly right skewed data but this can also be interpretted as only top 25% percentile of the population is having mortgage of house whose values range from 100,000 to 400,000 dollars. Though there are outliers, but with 50% set as 0 would mean that a large population does not have Mortgage also. Correlation between Income, MOrtgage abd Credit Card Spends might give a better picture.
+
+#### 
+```{r echo=FALSE}
+
+#checking the outliers in the data
+autofit(flextable(df_status(thera1[,-1])))
+
+```
+
+From the above table, considering columns:
+
+* q_zeros: quantity of zeros (p_zeros: in percent)
+* q_inf: quantity of infinite values (p_inf: in percent)
+* q_na: quantity of NA (p_na: in percent)
+* type: factor or numeric
+* unique: quantity of unique values     
+
+
+
+
+1. With zeros in variables Experience in years indicate that there are 1.32% of the population which has no experience; 
+2. Average Spends Per Month on Credit Card have 106 zeros which could also mean that 2.12% of the population has zero credit card spending in a month; 
+3. 69.2% of the population or 3,462 customers have zero value in house mortgage; 
+4. Family Members has 18 NA's. This has to be treated in the later part.
+5. Another important information that can be interpretted from the table is that 89.5% Population do not have a securities account with the bank, whereas 93.9% of customers didn't have a certificate of deposit;  
+6. There were 40% customers who did not have online usage and 70% did not used the bank issued credit card.  
+
+## Data Preparation  
+#### Missing Value, Outlier & Negative Values Treatment  
+```{r}
+
+#removing the "ID" and "Zip Code" variables as they are not very useful for analysis.
+
+thera1= thera1[,-c(1,5)]
+
+#Fixing the negative values as 0, which implies No experience
+thera1$ExpinYears= abs(thera1$ExpinYears)   
+dim(thera1)
+
+#checking for missing values and replacing using knnimputation
+sum(is.na(thera1))
+
+library(DMwR)
+
+thera1 = knnImputation(thera1, k = 5) 
+
+#there is no missing data in family members
+sum(is.na(thera1))
+
+#No more data is missing
+summary(thera1)
+```
+
+*knnImputation* function is used to impute the missing values for Family members.
+*abs* function is used to remove the negative values from Experience and 
+**ID** and **ZIPCODE** variables are removed from the analysis as they are not wanted during the model building. To check the final dimensions are 5000 observations with 12 variables - 5 numeric and 6 categorical variables as predictors and with Personal Loan as the Target. S
+
+```{r echo=FALSE}
+#final data
+theraData=thera1
+attach(theraData)
+dim(theraData)
+
+str(theraData)
+```
+
+
+### Univariate Analysis 
+
+#### Histograms & BOxplots to understand the distribution of the numeric variables
+```{r echo=FALSE}
+theraNum= theraData[,c(1,2,3,5,7)]
+plot_num(theraNum, bins=10)
+```
+
+As described above, Age and Experience show a normal distribution, Income and Credit card Average Spends depict a right skewed data where as Mortgage has a huge right skewed spread. Let's explore th Boxplots to understand where the outliers majorly lie, using categorical variables Family members, Securities, CCUsage and Personal loans.
+
+```{r echo= FALSE}
+plot_boxplot(theraData, by = "PersonalLoan", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+
+plot_boxplot(theraData, by = "EducLevel", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+
+plot_boxplot(theraData, by = "FamilyMembers", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+
+
+plot_boxplot(theraData, by = "Securities", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+
+
+```
+
+* Majority of the outliers in Average Spends in Credit Cards are coming from customers who have not bought Personal Loans;
+* Age and Experience do not have outliers;
+* Customers who accepted the Personal Loan have a higher income level and have an even spread of distribution compared to customers who have not accepted the Personal loan- the outliers are majorly who have a very high income per year rangning above 150,000 to 200,000 dollars per year;
+* Outliers in Mortgage is irrespective of anyone who has accepted the loan or not but certainly  more for those who have not taken the Personal loan;
+* Family members with 3 or 4 members have more outliers in Income, whereas Credit Card Spends and Mortgages are done by customers with all levels of family. 
+
+### Bivariate Analysis  
+Let's explore one or more categorical and numerical variables with Personal Loan to see if any trend comes out: 
+```{r echo=FALSE}
+
+plot_correlation(theraNum)
+
+```
+
+1. Age and Experience are highly correlated. So we can use any one of the variables while building Models.
+2. Income Per Year and Credit card Spends is also positively correlated, which means as the Income icnreases, the Credit card Spends increase.
+
+```{r echo=FALSE}
+library(gridExtra)
+p1 = ggplot(theraData, aes(IncomePerYear, fill= PersonalLoan)) + geom_density(alpha=0.4) 
+p2 = ggplot(theraData, aes(CCAvgSpends, fill= PersonalLoan)) + geom_density(alpha=0.4)
+p3 = ggplot(theraData, aes(AgeinYears, fill= PersonalLoan)) + geom_density(alpha=0.4)
+p4 = ggplot(theraData, aes(MortValue, fill= PersonalLoan)) + geom_density(alpha=0.4)
+p5 = ggplot(theraData,aes(x=PersonalLoan, color = PersonalLoan, fill= PersonalLoan))+theme_bw()+
+  geom_bar()+labs(y="counts", title= "Personal Loan Distribution")
+#p5 = ggplot(theraData, aes(Income, fill= Education)) + geom_histogram(alpha=0.4, bins = 70)
+#p6 = ggplot(theraData, aes(Income, Mortgage, color = Personal.Loan)) + 
+  #geom_point(alpha = 0.7)
+grid.arrange(p1, p2, p3, p4,p5, ncol = 2, nrow = 3)
+```
+From the density plots above, Personal Loan is taken by high incomed professionals whereas Non Personal Loans takers are customers who have lesser credit card spends. The histogram of Personal loan distribution clearly shows 9.6% as the personal loan takers and rest as non takers.
+
+```{r echo=FALSE}
+#Graph showing a relation between income, CCSpends, Education Level and Family members
+ggplot(theraData,aes(x=IncomePerYear, y=CCAvgSpends, color= PersonalLoan ))+geom_point()+
+  facet_grid(FamilyMembers~ EducLevel )+labs(y="CreditCardSpends", x="IncomePeryear",
+                                          title= "Income, Education, FamilyMembers & loans")
+```
+* The above graph depicts that Graduates and Advance Professional with income earning 100,000 dollars and above have accepted the PersonalLoan.
+* Undergraduates with a family of 2 or less are have not or minimally accepted the PersonalLoan.
+
+
+
+Is personal loan taken people who have a house mortgage value ?
+
+```{r echo=FALSE}
+ggplot(theraData,aes(x=IncomePerYear, y= MortValue, color= PersonalLoan))+geom_point()+
+  facet_grid(EducLevel~ CCUsage )+labs(y="MortgageValue", x="IncomePeryear", 
+                                   title= "Mortgage Value, Income,Credit Card Customers & loans")
+```
+                                   
+* This graph depicts Educated Professional with Higher incomes have high mortgage values who are clearly Personal Loan takers.
+
+```{r echo=FALSE}
+# Is personal Loan taken by customers with Securities and CD Account with the bank/
+#Cross Variable analysis  to understand the if the Personal loans were accepted by bank Loyalists or NTB customers.
+
+xtabs(~Securities+CDAcc + PersonalLoan,data=theraData)
+
+```
+
+68% of the People who accepted the Personal Loan did not have a Securities and CD Account with the bank.So they could NTB customers. 
+
+```{r echo=FALSE}
+# Is Personal Loan taken by High Credit card usage or High Online Usage?
+ggplot(theraData,aes(x=ExpinYears, y= IncomePerYear, color= PersonalLoan))+geom_point()+
+  facet_grid(Securities~ CDAcc)+labs(y="Income", x="Experience", 
+                                         title= "Loyalists Vs Income & Experienced Customers")
+
+
+xtabs(~OnlineUsage+CCUsage + PersonalLoan,data=theraData)
+```
+73% of the population who accepted the Personal loan were either using one or both the banking product & services - Internet banking and Credit Card respectively.
+
+
+### Data Partition - Train & Test
+#### Setting up Train & Test of the dataset
+```{r}
+#Paritioning the data into training and test dataset
+set.seed(100)
+
+TR_N_TRAIN_INDEX <- sample(1:nrow(theraData),0.70*nrow(theraData))
+trainDS <- theraData[TR_N_TRAIN_INDEX,]
+testDS <- theraData[-TR_N_TRAIN_INDEX,]
+nrow(trainDS)
+nrow(testDS)
+
+#checking the target distribution -This needs to be same/similar in both Train & Test
+sum(trainDS$PersonalLoan==1)/nrow(trainDS)
+sum(testDS$PersonalLoan==1)/nrow(testDS)
+```
+The train and test data have 3500 and 1500 observations split respectively by dividing it into 70:30 split. Personal Loan % is similar upto 0.097 or around 9.7% which is same as the success ratio provided by the bank originally.
+
+### CART Model
+```{r echo=FALSE}
+#RUNNING the First Model - DECISION TREES
+
+#running the model without a cp parameter to grow the full tree
+dstree <- rpart(formula = PersonalLoan ~ ., 
+              data = trainDS, method = "class", cp=0, minbucket=3)
+
+#printing the decision tree in the console
+dstree
+#plots the tree in a graphical manner
+rpart.plot(dstree)
+
+printcp(dstree)
+plotcp(dstree)
+dstree$cptable[which.min(dstree$cptable[,"xerror"]),"CP"]
+```
+The Variables used in the decision tree are Age, credit card spends, Education, Family Members, Income , MOrtgage and Online Usage. The full tree is grown with 22 nsplits but the *xerror* is reducing till 13 nsplits. checking the CP or cost complexity parameter, the tree can be pruned at a 0.00292. 
+
+
+#### Pruning the decision tree
+CP or Cost complexity parameter is the metric which ic considered to Prune trees. The idea behind pruning a decision tree is to ensure to build a model which is neither over fitting nor underfitting and can be a good model as well as be a simpler decision tree.
+
+From the CP table above, we have to choose a cp value which has the minimum xerror or the cross validated error, which in other words means that any further pruning the tree is not making the model any better
+
+```{r echo=FALSE}
+ptree = prune(dstree, cp= 0.00292 ,"CP")
+printcp(ptree)
+ptree
+#shorter tree than the original
+fancyRpartPlot(ptree, cex=0.5,palettes = c("Greys" ,"Oranges"), title("Pruned Decision Tree"))
+```
+
+```{r echo=FALSE}
+path.rpart(ptree,c(7,13,15,23,26,27,29,45,53,115,229,457))
+ptree$variable.importance
+```
+
+Post Pruning, The model has now considered only 5 variables namely- Age, Credit Card Spends, Education, Family Members and Income.  
+
+As per the variable Importance, Income, Education Level, family members, Credit Card Spends are the most important variables from the model.
+
+The Orange Nodes considered provides higher percentages of 1's or Nodes which bufurcate the customers who have bought Personal Loans can be interpretted as :  
+* Nodes 7 which constitutes 8% of the total observations, can be interpretted as Customers with Income greater than 104,500 Dollars  and education levels are 2,3 i.e graduate or Advance level.  84% of the Personal Loan takers are in this node.  
+* Nodes 13 which further constitute 2% of the total observations, have Income greater than 111,000, Edu level=1 with family members =3 or 4 have 92% accepted Personal Loans.  
+* Nodes 15 which is 6% of total observations has 100% target as 1's which means Personal Loans have been accepted by customers who are graduate or advance professional and with income levels greater or equal to 116,500 dollars.  
+* Node 23 which is a small percentage of the total obs; where Income less that 104.5 dollars, Undergradutes, Family of 3 or 4,  and credit card spends on 2,900 dollars and above are customers who have also accepted Personal loans.  
+* Nodes 457 is which also has a very small percent of the total data, has customers with income levels between 104.5 and 116.5, Graduates or Advanced Educated, have an average credit card spending of 1,600 to 2,700 dollars per month Family of 1 or 3 and age above 36 years have accepted the personal loans.  
+
+### Scoring Process
+```{r}
+#Scoring Syntax
+##Use this tree to do the prediction on train as well as test data set
+trainDS$CART.Pred = predict(ptree,data=trainDS,type="class")
+trainDS$CART.Score = predict(ptree,data=trainDS,type="prob")
+
+
+
+```
+
+## Deciling Process
+```{r}
+decile <- function(x)
+  { 
+  deciles <- vector(length=10) 
+  for (i in seq(0.1,1,.1))
+    { 
+    deciles[i*10] <- quantile(x, i, na.rm=T)   
+    }   
+  return ( 
+    ifelse(x<deciles[1], 1, 
+           ifelse(x<deciles[2], 2, 
+                  ifelse(x<deciles[3], 3, 
+                         ifelse(x<deciles[4], 4, 
+                                ifelse(x<deciles[5], 5,
+                                       ifelse(x<deciles[6], 6,
+                                              ifelse(x<deciles[7], 7,
+                                                     ifelse(x<deciles[8], 8,
+                                                            ifelse(x<deciles[9], 9, 10
+                                                                   )))))))))) 
+  }
+
+class(trainDS$CART.Score)
+## deciling 
+trainDS$deciles <- decile(trainDS$CART.Score[,2])
+
+
+```
+### Ranking Process
+```{r echo=FALSE}
+#install.packages("data.table")
+#install.packages("scales")
+library(data.table)
+library(scales)
+tmp_DT = data.table(trainDS)
+
+rank <- tmp_DT[, list(cnt=length(PersonalLoan),
+                      cnt_resp=sum(PersonalLoan==1),
+                      cnt_non_resp=sum(PersonalLoan==0)
+                      ), by=deciles][order(-deciles)]
+
+rank$rrate <- round(rank$cnt_resp / rank$cnt,4); 
+rank$cum_resp <- cumsum(rank$cnt_resp) 
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp) 
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),4); 
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate <- percent(rank$rrate) 
+rank$cum_rel_resp <- percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp) 
+rank
+
+
+
+```
+
+```{r}
+
+library(ROCR)
+library(ineq)
+
+
+pred <- prediction(trainDS$CART.Score[,2], trainDS$PersonalLoan) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf)
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(trainDS$CART.Score[,2], type="Gini") 
+with(trainDS, table(PersonalLoan, CART.Pred)) 
+
+KS
+auc
+gini
+
+```
+
+#### Interpretation of Rank Order Table on Train data
+
+1. Response Rate is 87% in the top decile of the training set
+2. KS score is 94%, which indicates its a very good model
+3. AUC is 99.82% and Gini is 0.89 which again indicates the model performance is very good.
+
+This further has to be checked on the Test data
+
+```{r}
+#test data
+testDS$CART.Pred = predict(ptree,testDS,type="class")
+testDS$CART.Score = predict(ptree,testDS,type="prob")
+
+class(testDS$CART.Score)
+## deciling 
+testDS$deciles <- decile(testDS$CART.Score[,2])
+
+```
+
+```{r echo=FALSE}
+
+
+tmp_DT = data.table(testDS)
+
+rank <- tmp_DT[, list(cnt=length(PersonalLoan),
+                      cnt_resp=sum(PersonalLoan==1),
+                      cnt_non_resp=sum(PersonalLoan==0)
+                      ), by=deciles][order(-deciles)]
+
+rank$rrate <- round(rank$cnt_resp / rank$cnt,4); 
+rank$cum_resp <- cumsum(rank$cnt_resp) 
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp) 
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),4); 
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate <- percent(rank$rrate) 
+rank$cum_rel_resp <- percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp) 
+rank
+
+
+
+```
+
+
+```{r}
+
+
+
+pred <- prediction(testDS$CART.Score[,2], testDS$PersonalLoan) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf)
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(testDS$CART.Score[,2], type="Gini") 
+with(testDS, table(PersonalLoan, CART.Pred)) 
+
+KS
+auc
+gini
+
+```
+
+```{r echo=FALSE}
+library(caret)
+
+confusionMatrix(trainDS$PersonalLoan,trainDS$CART.Pred, positive = "1")
+confusionMatrix(testDS$PersonalLoan,testDS$CART.Pred, positive= "1")
+```
+
+
+
+### Overall Summary of the Model:
+1. KS is 93% on the test which indicates a good model;
+2. AUC is 99.5% and Gini is 90.22
+Confusion matrix:
+1. Accuracy on the test data = (1355+120)/(1355+7+18+120) = 98.3%
+2. Classification Error Rate = 1 - Accuracy = 1.67%
+
+Since this is a classification model, where the target has a binary output as 1s or 0s a **confusion matrix** is a performance metric which gives the output of counts of the True and False Predictions. To give an inference on the output of train data:  
+1. The TPR  or **Sensitivity** is how many "predicted" positives are actual positives, which if referred to the matrix, 320 1's which were actual positives and correctly predicted positives too by the model; which in other words would mean that the model has correctly predicted 320 customers who in actual also took a personal loan on the training data; 120 are True Positives for the test data. 
+2. The **Accuracy** of this model is 0.99 or 0.98 i.e. 99% and 98% on train and test data.
+3. **True Negatives** or **Specificity** is how many "predicted" negatives are actual negatives, which in this case would mean that the model has correctly predicted 3148 customers who will not be thr right target for the presonal loan in reality also did not take the personal loan.  
+4. **False Positives** which is total number of "predicted" positives that are actually negative are 22 which means that the model misclassified 22 people as Customers who took personal loan but in reality did not take the personal loan.  
+5. **False Negative** which is the total number of "predicted" negatives that are actually positive are 10 customers who as per the model are not the right customers to offer the loan but in reality took the Personal loan in the train set.
+
+
+While looking at the confusion matrix, it is very important to understand which metric will be more beneficial as per the problem statement and that with iterations in the models, which metric can we impact to get a minimise cost and maximise reachability for offering to the right customer.If the aim is to increase the True Positive, we need to work towards minimising False Positives and If the aim is to increase the true negative, we need to work towards minimising False negative. 
+
+There always has to be a trade-off and based on the problem where the department wants to build a model that will help them identify the potential customers who have a higher probability of purchasing the loan while at the same time reduce the cost of the campaign, we should target to **increase the True Positive rate** or Sensitivity, because then we will be able to reduce False Positive Rate  or the misclassification of actual negatives which reduces our cost for the campaign, whereby the bank doesn't have to send the marketing offer to people whom they know are not high profitable customers and also reduce False Negative Rate or the misclassifaction of actual positives which reduces our success ratio by targetting people whom in reality haven't purchased the loan.
+
+Though this model has a very high Accuracy of 99.13% and 98.03% on Training and Test data set. The model has a high senstivity or Recall of 98.37% too which also means that the model is **Overfitting**. 
+
+
+### RANDOM FOREST Model
+```{r}
+## Spliting the dataset into train and test for development and out of sample testing respectively
+set.seed(100)
+TR_N_TRAIN_INDEX <- sample(1:nrow(theraData),0.70*nrow(theraData))
+RFtrain <- theraData[TR_N_TRAIN_INDEX,]
+RFtest <- theraData[-TR_N_TRAIN_INDEX,]
+sum(RFtrain$PersonalLoan==1)/nrow(RFtrain)
+sum(RFtest$PersonalLoan==1)/nrow(RFtest)
+
+```
+
+```{r echo=FALSE}
+
+##import randomForest library for building random forest model
+
+library(randomForest)
+
+## set a seed to start the randomness
+seed = 1000
+set.seed(seed)
+
+ncol(RFtrain)
+sqrt(14) #just a guideline for mtry sizes
+
+##Build the first RF model
+
+Rforest = randomForest(PersonalLoan~ .,
+                       data=RFtrain,
+                       ntree=501, #setting an odd number as the prediction becomes better
+                       mtry=10,#tal number of random predictors that can be used in each RF, this has to lesser than the total number of predictors
+                       nodesize=10,# similar to minbucket
+                       importance=TRUE) # Importance of Variables
+
+print(Rforest)
+
+
+plot(Rforest, main="")
+legend("topright", c("OOB", "0", "1"), text.col=1:6, lty=1:3, col=1:3)
+title(main="Error Rates Random Forest ")
+```
+
+**OOB error rate** or Out of Bag error rate is 1.54; Means that after a certain number of splitting of trees, the OOB prediction doesn't have much impact. Upon Checking the Error rATES plot, we notice that the OOB is constant after 101 trees. So we can try setting the ntree option to 101 instead of 501
+```{r echo=FALSE}
+
+##Tune up the RF model to find out the best mtry
+set.seed(seed)
+tRforest = tuneRF(x=RFtrain[,-c(8)],
+                  y=RFtrain$PersonalLoan,
+                  mtrystart = 10,
+                  stepfactor=1.5,
+                  ntree=101,
+                  improve=0.0001,
+                  nodesize=10,
+                  trace=TRUE,
+                  plot=TRUE,
+                  doBest=TRUE,
+                  importance=TRUE)
+
+#The same number of variables are important. 
+
+
+```
+```{r}
+importance(Rforest)
+
+varImpPlot(tRforest, main = "Variable Importance Plots")
+```
+
+
+OOB Error has further reduced to 1.49% post tuning the model.
+From running the Variable Importance Plots, Income Per Year, Education Level, Credit Card Spends and Family Family Members are the most importance variables. Removing any of the other variables other then the mentioned above, will decrease the Mean Accuracy and Mean Gini Score by a small percentage. Let's predict the model on train and test data.
+
+```{r echo=FALSE}
+
+##prediction on the RF train data
+
+RFtrain$RF.Pred = predict(tRforest, RFtrain, type="class")
+RFtrain$RF.Score = predict(tRforest, RFtrain, type="prob")
+
+```
+
+```{r}
+
+class(RFtrain$RF.Score)
+## deciling 
+RFtrain$deciles <- decile(RFtrain$RF.Score[,2])
+
+```
+
+
+### Ranking Process for Random Forest
+```{r echo=FALSE}
+#install.packages("data.table")
+#install.packages("scales")
+library(data.table)
+library(scales)
+tmp_DT = data.table(RFtrain)
+
+rank <- tmp_DT[, list(cnt=length(PersonalLoan),
+                      cnt_resp=sum(PersonalLoan==1),
+                      cnt_non_resp=sum(PersonalLoan==0)
+                      ), by=deciles][order(-deciles)]
+
+rank$rrate <- round(rank$cnt_resp / rank$cnt,4); 
+rank$cum_resp <- cumsum(rank$cnt_resp) 
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp) 
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),4); 
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate <- percent(rank$rrate) 
+rank$cum_rel_resp <- percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp) 
+rank
+```
+
+```{r}
+
+library(ROCR)
+library(ineq)
+
+
+pred <- prediction(RFtrain$RF.Score[,2], RFtrain$PersonalLoan) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf)
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(RFtrain$RF.Score[,2], type="Gini") 
+with(RFtrain, table(PersonalLoan, RF.Pred)) 
+
+KS
+auc
+gini
+```
+
+
+### Summary of the train data
+Top two deciles has a KS of 88 whereas the response rate is 96% and 1% in the same top deciles indicating that the maximum positives or Personal Loan takers Success ratio can be obtained by sending the campaign to the top 20% deciles.
+AUC  is 99.98% and Gini is 88.87 which definitely indicates this Random forest to be a very good model.
+
+
+
+```{r echo=FALSE}
+RFtest$RF.Pred = predict(tRforest, RFtest, type="class")
+RFtest$RF.Score = predict(tRforest, RFtest, type="prob")
+
+
+## deciling 
+RFtest$deciles <- decile(RFtest$RF.Score[,2])
+
+## Ranking
+tmp_DT = data.table(RFtest)
+
+rank <- tmp_DT[, list(cnt=length(PersonalLoan),
+                      cnt_resp=sum(PersonalLoan==1),
+                      cnt_non_resp=sum(PersonalLoan==0)
+                      ), by=deciles][order(-deciles)]
+
+rank$rrate <- round(rank$cnt_resp / rank$cnt,4); 
+rank$cum_resp <- cumsum(rank$cnt_resp) 
+rank$cum_non_resp <- cumsum(rank$cnt_non_resp) 
+rank$cum_rel_resp <- round(rank$cum_resp / sum(rank$cnt_resp),4); 
+rank$cum_rel_non_resp <- round(rank$cum_non_resp / sum(rank$cnt_non_resp),4); 
+rank$ks <- abs(rank$cum_rel_resp - rank$cum_rel_non_resp) * 100; 
+rank$rrate <- percent(rank$rrate) 
+rank$cum_rel_resp <- percent(rank$cum_rel_resp) 
+rank$cum_rel_non_resp <- percent(rank$cum_rel_non_resp) 
+rank
+
+
+
+## Model Performance
+pred <- prediction(RFtest$RF.Score[,2], RFtest$PersonalLoan) 
+perf <- performance(pred, "tpr", "fpr") 
+plot(perf)
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+
+
+auc <- performance(pred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini = ineq(RFtest$RF.Score[,2], type="Gini") 
+with(RFtest, table(PersonalLoan, RF.Pred)) 
+
+KS
+auc
+gini
+
+```
+### Summar on Random Forest Model Performance
+
+Response rate is 91% in the top 2 deciles, with KS being 94.74 
+AUC is 99.65 and Gini is 87.88 which is higher than gini of the train model
+Confusion Matrix on Test Data:
+1. Accuracy of the model =(1358+118)/(1358+4+20+118)= 98.4%
+2. Classification Error Rate = 1-Accuracy= 1.6%
+
+
+### Conclusion on Model Performance
+
+1. Random Forest Model has a High KS metric for both Train and Test data compared to the CART Model which means that maximum separation between the Positive and Negative Class is done in the Random Forest Model.
+2. The Gini Score is high in the CART test model (0.902) compared to the RF test model (0.87) which implies that model has more purity which also could mean that this would be an overfitting model 
+3. Senstivity or Recall is high in Random Forest Test Model, which implies the True Positive Rate is high as the percentage of predicted positives to actual positives is high, resulting in higher success ratio and cost effective campaign
+4. Class Error rate is less in the Random Forest Train Model compared to Cart Train Model.
+5. Overall, If a high profitable base at a given budget is the aim, the Random Forest Model is a better performer than Cart Model.
+
+

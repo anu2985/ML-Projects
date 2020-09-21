@@ -1,0 +1,657 @@
+---
+title: "Telecom Case Study"
+author: "Anupama Rathore"
+date: "20/06/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+
+toload_libraries <- c("reshape2", "rpsychi", "car", "psych", "corrplot", "forecast", "GPArotation", "psy", "MVN", "DataExplorer", "ppcor", "Metrics", "foreign", "MASS", "lattice", "nortest", "Hmisc","factoextra", "nFactors")
+#new.packages <- toload_libraries[!(toload_libraries %in% installed.packages()[,"Package"])]
+#if(length(new.packages)) install.packages(new.packages)
+lapply(toload_libraries, require, character.only= TRUE)
+library(funModeling)
+library(Hmisc)
+#install.packages("RColorBrewer")
+library(RColorBrewer)
+library(PerformanceAnalytics)
+library(nFactors)
+library(psych)
+library(flextable)
+library(officer)
+library(GGally)
+library(caTools)
+library(data.table)
+library(ROCR)
+library(class)
+library(gmodels)
+library(naivebayes)
+library(gridExtra)
+```
+
+
+# Introduction
+
+**Telecom** Customer Churn is a burning problem for Telecom companies. In this project, we simulate one such case of customer churn where we work on a data of postpaid customers with a contract. 
+
+The data has 3,333 observations and 11 variables with **Churn** as the Target Variable. There are three  variables that are factor and rest are numeric variables including churn. 
+
+The data has information about the customer usage behavior, contract details and the payment details. The data also indicates which were the customers who canceled their service. 
+
+Among these 3333 customers, 483 customers churned which is (= 14.49%) and 2850 customers retained or did not churn.
+
+## Problem Statement
+A model has to be build a model in a way that can predict whether a customer will cancel their service in the future or not.
+  
+### Description of the Data  
+```{r echo=FALSE}
+
+celldata= readxl::read_excel("Cellphone.xlsx", sheet= 2)
+str(celldata)
+celldata= as.data.frame(celldata)
+dim(celldata)
+```
+
+```{r echo=FALSE}
+#EDA
+str(celldata)
+``` 
+
+All the variables are set as numeric. Hence, some variables need to be converted.
+Variables - Contract Renewal, Data Plan and Customer Service Calls have to be converted as Factors.
+Churn is Target Variable.
+
+```{r echo=FALSE}
+#convert churn, contract renewal and data plan variables and CustServCalls as factor
+
+celldata$Churn= as.factor(celldata$Churn)
+celldata$ContractRenewal= as.factor(celldata$ContractRenewal)
+celldata$DataPlan= as.factor(celldata$DataPlan)
+celldata$CustServCalls= as.factor(celldata$CustServCalls) # this has 10 levels
+
+summary(celldata)
+attach(celldata)
+```
+Macro Insights from Factor Variables - Churn, Contract Renewal and Data Plan  & Customer Service Plans variables:   
+ 1. 14.49% is the churn rate which means that 85% of the customers continue the service and only 14.49% have canceled their service; 
+ 2. 10% Customers did not renew the contract whereas 90% did renew the contract;
+ 3. 27.6% have a data plan where as 72% customers do not have a data plan;
+ 4. Around 20% customers have never made a Customer Service Call whereas 80% have made one or more calls with a small percent of calls more than 4.  
+ 
+### Exploration of the Data    
+```{r echo=FALSE}
+autofit(flextable(df_status(celldata)))
+```
+
+From the above table, there are no missing data and zeros in different variables have a different insight; which can be interpreted as:  
+* 54% customers have less than 1 GB data usage on a monthly basis
+* Top 10% customers have usage more than 3GB per month of data usage
+* There are 20.9% customers who have never made customer service calls  
+
+Let's check the descriptive table for numeric variables:    
+
+```{r echo= FALSE}
+cellProfile=profiling_num(celldata[,-c(1,3,4)])
+autofit(flextable(cellProfile))
+```
+To interpret:
+* 75% of the customers have had an active account of 127 weeks which means they are with the service provider for over than 2.44 years or less and with an average means of 1.9 years. The top 1% percentile customers have also been active with the service provider between 3.5 to 4.5 years;
+* 3/4 of the customers have around 216 minutes of average daytime minutes per month or in other words around 3.6 hours per day is the average phone usage as talk time;
+* 95% of the customers do not have an average monthly bill which exceeds $100 per month;  
+
+#### Histograms  
+```{r echo=FALSE}
+
+#to check the distribution of the numeric variables
+cellNum= celldata[,c(2,5,7,8,9,10,11)]
+plot_num(cellNum, bins=10)
+```
+  
+* From the plot, Account Weeks, DayMins, DayCalls, Overage fee and Roam Mins show a normal distribution;
+* Data Usage has breaks, where its seen that around 50% of customers have less the 1 GB Usage. Hence the Peak is seen.
+* Monthly charge is slight left-skewed with 75 percentile or 75% of customers having an average monthly bill of 66 or less.  
+
+#### Boxplots   
+
+```{r echo=FALSE}
+# Outliers in respect with Churn
+plot_boxplot(celldata, by = "Churn", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+```
+Customers whose data  usage was less than a GB, have mostly churned, compared to Non churned customers.  
+
+```{r echo=FALSE}
+
+plot_boxplot(celldata, by = "ContractRenewal", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+```  
+
+Outliers are seen for Customers who have renewed the contract compared to customers who have not renewed the contract.  
+
+```{r echo=FALSE}
+plot_boxplot(celldata, by = "DataPlan", 
+             geom_boxplot_args = list("outlier.color" = "red"))
+```
+Customers who have a data plan have a higher monthly charge average bill compared to non data plan usage customers. Their data usage was also higher compared to non data plan users.
+
+#### Bivariate Analysis  
+
+```{r echo=FALSE}
+
+#Bi-Variate Analysis for all numeric variables
+chart.Correlation(cellNum, histogram = T, pch=15)
+
+``` 
+Monthly Charge is highly correlated with Data Usage and Day Mins, where as its moderately correlated with Overage fee and Roam Mins.
+Data Usage is also weakly correlated with Roam Mins. 
+Overall, the numeric variables look normally distributed excepted for Data Usage which shows a left skewed data indicating that maximum customers have data usage lesser than 1 GB.
+
+#### Correlation Plots  
+
+```{r echo=FALSE}
+#Correlation Plot
+plot_correlation(cellNum)
+```
+
+Understanding the behaviour of Churn customers in terms of their activity- Active period, Data Usage, DayCalls, MonthlyCharge, Overage Fee and RoamMins  
+
+```{r echo=FALSE}
+library(gridExtra)
+p1 = ggplot(celldata, aes(AccountWeeks, fill= Churn)) + geom_density(alpha=0.4) 
+p2 = ggplot(celldata, aes(DataUsage, fill= Churn)) + geom_density(alpha=0.4)
+p3 = ggplot(celldata, aes(DayMins, fill= Churn)) + geom_density(alpha=0.4)
+p4 = ggplot(celldata, aes(MonthlyCharge, fill= Churn)) + geom_density(alpha=0.4)
+p5 = ggplot(celldata, aes(OverageFee, fill= Churn)) + geom_density(alpha=0.4)
+p6 = ggplot(celldata,aes(x=Churn, color = Churn, fill= Churn))+theme_bw()+
+  geom_bar()+labs(y="counts", title= "Churn Distribution")
+p7 = ggplot(celldata, aes(AccountWeeks, fill= ContractRenewal)) + geom_histogram(alpha=0.4, bins =20)
+p8 = ggplot(celldata, aes(AccountWeeks, CustServCalls, color = Churn)) +geom_point(alpha = 0.7)
+grid.arrange(p1, p2, p3, p4,p5, p6, p7, p8, ncol = 2, nrow = 4)
+``` 
+
+The above density plots indicate the following about churn customers:  
+1. Average DayMins have two peaks and have higher average daytime minutes per month 
+2. Churn Customers have a lesser Data Usage 
+3. A higher average Monthly charge, i.e bill exceeding 60, may result the customer to churn 
+4. Overage Fee and Account Weeks are pretty consistent and do not indicate any significant behavior for Churned vs non churned 
+4. The scatter plot between Customer Service Calls over Active period indicates that Churned customers are the ones who have made 4 or more customer service calls during their active period 
+
+#### Graph showing a relation between Active Period, Monthly Charge and Customer Service Call
+```{r echo=FALSE} 
+#Graph showing a relation between Active Period,Monthly Charge and Customer Service Call
+ggplot(celldata,aes(x=AccountWeeks, y=MonthlyCharge, color= Churn ))+geom_point()+
+  facet_wrap(~CustServCalls)+labs(y="MonthlyCharge", x="AccountWeeks")
+``` 
+
+This above graph indicates Higher Customer Service calls i.e. 4 on more customer calls have definitely impacted to Churn; Alternatively it can also be interpreted Customers who have not churned have made three or lesser Customer Service Calls and their active period with the service provider has been longer.  
+
+#### Relation between Contract Renewal, DataPLan , Customer Service call and Churn 
+```{r echo=FALSE}
+
+chisq.test(table(ContractRenewal,Churn))
+chisq.test(table(DataPlan,Churn))
+chisq.test(table(CustServCalls,Churn))
+```
+
+All the three factor variables - Contract Renewal, Data Plan and Customer Service Call are important variables that impact Churn as the p-value turn out to be significant.
+
+Further, let's take a quick graphical check to how the dichotomous variables can impact churn:
+```{r echo=FALSE}
+
+# contingency table of dicotomous variables with target variable
+cat.data = subset(celldata, select = c("DataPlan","CustServCalls","ContractRenewal"))
+
+names(cat.data)
+# for 6 categorical variables draw the barplot w.r.t to target variable
+par(mfrow=c(1,3))
+for (i in names(cat.data)) {
+  print(i)
+  print(table(Churn, cat.data[[i]]))
+  barplot(table(Churn, cat.data[[i]]),
+          col=c("grey","red"),
+          main = names(cat.data[i]))
+}
+```
+
+### Data Preparation & Partitioning  
+```{r echo= FALSE}
+# Split data into test and train datasets
+celldata1=celldata
+celldata1$CustServCalls= as.numeric(celldata1$CustServCalls)
+celldata1$cscAbove4= ifelse (celldata1$CustServCalls>=4, 1,0)
+celldata1$cscAbove4= as.factor(celldata1$cscAbove4)
+celldata1= celldata1[,-c(6,13)]
+names(celldata1)
+str(celldata1)
+summary(celldata1)
+
+#dropping customer service calls
+
+set.seed(300)
+#library(caTools)
+ind <- sample(2, nrow(celldata1), replace=TRUE, prob=c(0.7, 0.3))
+trainLOG<- celldata1[ind==1,]
+testLOG <- celldata1[ind==2,]
+#data is split in a ratio of 70:30 with train and test.
+
+## Check split consistency
+sum(trainLOG$Churn==1)/nrow(trainLOG)
+sum(testLOG$Churn==1)/nrow(testLOG)
+sum(celldata1$Churn==1) / nrow(celldata1)
+
+#the split should have similar percent of churns Vs non churns and hence this achieved.
+```
+
+Data is split in the ratio of 70:30 for train and test;
+Split has a similar breakup of churn Vs Non churn observations.  
+
+### Logistic Regression- Model and Interpretation  
+
+##### Logistic Regression Model 1  
+```{r echo=FALSE}
+# build the model
+LR_Train_model = glm(Churn ~ . , data = trainLOG, family= binomial)
+summary(LR_Train_model)
+
+```
+From the output above, the coefficients table shows the beta coefficient estimates and their significance levels. Columns are:  
+* Estimate: the intercept (b0) and the beta coefficient estimates associated to each predictor variable
+* Std.Error: the standard error of the coefficient estimates. This represents the accuracy of the coefficients. The larger the standard error, the less confident we are about the estimate.
+* z value: the z-statistic, which is the coefficient estimate (column 2) divided by the standard error of the estimate (column 3)
+* Pr(>|z|): The p-value corresponding to the z-statistic. The smaller the p-value, the more significant the estimate is.
+
+
+Interpretations of the Logistic model:
+1. This is the full model where all the variables - numeric and categorical variables with their levels are included;
+2. It can be seen that 4 out of 11 variables are significant. These include : **Contract Renewal, DataPlan, CustServCalls at different levels- 1,4,5,6,7 and Overage Fee.**
+3. From this model, it definitely appears there is **multi-collinearity** as correlation plots depicted the same too, will run a **VIF* check, to further analyze it.
+
+```{r echo=FALSE}
+car::vif(LR_Train_model)
+```
+
+Running the VIF, indicates DataPlan, DataUsage, DayMins, Monthly Charge and Overage Fee are highly correlated. Hence We will run the model post dropping some of the variables.
+
+##### Logistic Regresssion Model 2  
+```{r echo=FALSE}
+
+LR_Train_model1 = glm(Churn ~ . -DataUsage -MonthlyCharge -DayMins,  data = trainLOG, family= binomial)
+summary(LR_Train_model1)
+car::vif(LR_Train_model1)
+```
+
+Post dropping the variables with very high VIF- DataUsage, DayMins, MonthlyCharge and re-running the model, the Contract Renewal, DataPlan, Overage fee and RoamMins now turn out to be significant; The VIF values are also at  1 or less which means there is no correlation between the predictors. Removing the non significant predictors and re-running the model
+
+##### Logistic Regression Model 3 
+```{r echo=FALSE}
+LR_Train_model2= glm(Churn ~ . -AccountWeeks -DataUsage -MonthlyCharge -DayMins -DayCalls, data = trainLOG, family= binomial)
+summary(LR_Train_model2)
+car::vif(LR_Train_model2)
+```
+
+From this model3, Data Plan Users, Contract Renewal, Overage Fee and Roam Mins are significant. Another important point to notice is Customer Service calls more than 4 times, also turn out to be highly significant. 
+Will be getting on the interpreting the coefficients alittle later, but first we need to ensure if this is a valid model using the **LogLikelihood Test** and the **Psuedo R2** or the **Mc Fadden Values** to ensure the goodness of fit of the model.
+
+```{r goodnessoffit}
+library(lmtest)
+lrtest(LR_Train_model2)
+
+#install.packages("pscl")
+library(pscl)
+pR2(LR_Train_model)
+pR2(LR_Train_model1)
+pR2(LR_Train_model2)
+
+#Trust only McFadden since its conservative
+#if my McFadden > is between .0 to .10 - Goodness of fit is weak
+#if my McFadden > is between .10 to .20 - Goodness of fit is fare
+#if my McFadden > is between .20 to .30 - Goodness of fit is Moderately is robust
+#if my McFadden > is between .30 and above - Goodness of fit is reasonably robust model
+#Typical in non-linear model R2 will be less as against linear regression
+```
+
+* With a significant p-value, we can ensure that the logit model is valid.
+* The MCFadden value of 0.122 interprets that the goodness of fit is moderately fair. 
+
+```{r echo=FALSE}
+odds = exp(coef(LR_Train_model2))
+#write.csv(odds,"odds_telecom.csv")
+odds
+
+#for identifying the relative importance of variables we have to use Odds instead of Prob
+prob=odds/(1+odds)
+prob
+```
+Interpreting the coefficients and probability of odds:  
+ 
+* From the coefficients, we can interpret, the probability of a customer churning is 74.8%, when there is an increase in the Number of Customer Service Calls made by the customer keeping all other coefficients constant, 
+* The probability of a Customer churning is approx 52% when there is unit increase in Overage Fee or RoamMins while keeping other coefficients constant;
+* The probability of a Customer churning is approx 27.8% with every unit decrease in the usage of Data Plan; this can be further understood, that Data Plan is significant with a negative coefficient of -0.95; which in other words would mean that their is greater risk of a customer churning if the data plan usage reduces.
+* Finally, the probability of a customers churning is approx 15% when their a unit decrease in contract renewals with a negative coefficient of -1.707.
+
+Overall, post checking the relative importance of the odd:
+
+```{r}
+relativeImportance=(odds[-1]/sum(odds[-1]))*100
+relativeImportance[order(relativeImportance)]
+```
+
+We notice, that top variables which contribute highly to churn are Customer Service Calls Above 4, followed by Overage fee & RoamMins which is followed by DataPlan and lastly is Contract Renewals;
+
+Choosing an optimal cut off value can enhance the accuracy of the model in terms of improving the prediction for 1's or 0's or both and reduce the mis classification error.
+
+```{r echo=FALSE}
+library(InformationValue)
+
+# Performance on TRAIN dataset
+predTrain = predict(LR_Train_model2, newdata = trainLOG, type="response")
+
+optCutOff <- optimalCutoff(trainLOG$Churn, predTrain)[1] 
+#The optimal cutoff can be chosen as 0.50 and let's check the accuracy at  0.5 and 0.3
+
+
+table(trainLOG$Churn, predTrain>0.5)
+#Accuracy for 0.5 cutoff
+(1914+36)/nrow(trainLOG) #0.8586
+#Sensitivity (True Positive Rate)
+36/(36+298)  #0.10
+
+table(trainLOG$Churn, predTrain>0.3)
+#Accuracy for 0.3 cutoff
+(1792+94)/nrow(trainLOG) #0.8304
+#Sensitivity (True Positive Rate)
+94/(94+240)  #0.28
+```
+
+
+Accuracy reduces as the cutoff also reduces; at a cutoff of 0.5, the accuracy of the model is 0.855 but when the accuracy of the model is reduced the accuracy reduces to 0.83. Alternatively, By lowering the threshold, we have improved the sensitivity of the model on the train data to 0.10 from earlier 0.28, of course compromising on the overall accuracy which stands lower at 0.83. The specificity of the model is also compromised. The threshold can be further reduced to further improve the sensitivity which would mean the More churn customers would be captured when the threshold is lowered as the purpose of a churn model is to identify those customers who are likely to churn. 
+LEt's look at the ROCR Plot and check other performance measures- like the AUC, KS and Gini for the model.
+
+```{rs}
+library(ROCR)
+ROCRpred = prediction(predTrain, trainLOG$Churn)
+
+as.numeric(performance(ROCRpred, "auc")@y.values)
+perf = performance(ROCRpred, "tpr","fpr")
+#plot(perf,col="black",lty=2, lwd=2)
+plot(perf,lwd=3,colorize = TRUE)
+
+
+KS <- max(attr(perf, 'y.values')[[1]]-attr(perf, 'x.values')[[1]])
+KS
+
+auc <- performance(ROCRpred,"auc"); 
+auc <- as.numeric(auc@y.values) 
+
+gini =2*auc -1
+
+KS
+auc
+gini
+```
+
+```{r echo=FALSE}
+
+# Performance on TEST dataset
+predTest = predict(LR_Train_model2, newdata = testLOG, type="response")
+table(testLOG$Churn, predTest>0.5)
+(902+18)/nrow(testLOG)  #Accuracy 0.866
+18/(18+131) # Sensitivity 0.12
+
+table(testLOG$Churn, predTest>0.3)
+(852+42)/nrow(testLOG) #Accuracy 0.841
+47/(47+102) # Sensitivity 0.31
+library(ROCR)
+ROCRpredtest = prediction(predTest, testLOG$Churn)
+as.numeric(performance(ROCRpredtest, "auc")@y.values)
+perf1 = performance(ROCRpredtest, "tpr","fpr")
+#plot(perf,col="black",lty=2, lwd=2)
+plot(perf1,lwd=3,colorize = TRUE)
+
+
+KStest <- max(attr(perf1, 'y.values')[[1]]-attr(perf1, 'x.values')[[1]])
+KStest
+
+
+auctest <- performance(ROCRpredtest,"auc"); 
+auctest <- as.numeric(auctest@y.values) 
+
+gini =2*auctest -1
+
+KS
+auc
+gini
+```
+
+Interpretation:
+* The AUC of the model on train and test is 0.75 and 0.74 which means its a fair model and is not over-fitting;
+* KS of 0.39 and 0.38 for train and test indicates the max separation achieved between 1's and 0's i.e Churns Vs Non Churns.  
+* The Gini Coefficient for the test is 0.51 and 0.49 would mean the model is not fully pure.  
+
+
+### K-Nearest Neighbours(KNN)- Model and Interpretation  
+
+```{r echo=FALSE}
+# Libraries for ML models
+library(class)
+#libraries for plotting
+library(gmodels)
+#library(datasets)
+
+
+
+#Reading the cell phone data for KNN
+celldataKNN= celldata
+str(celldataKNN)
+celldataKNN= as.data.frame(celldataKNN)
+dim(celldataKNN)
+attach(celldataKNN)
+```
+
+Since KNN measure the Euclidean distance between points close and far in the neighborhood, *Scaling* is an important aspect for running a KNN model else the model would bias itself to higher numeric values. 
+Also,*dummy coding* Customer service calls is done.
+
+```{r echo=FALSE}
+#scaling for All Numeric variables
+celldataKNN[,c("AccountWeeks", "DataUsage","DayMins","DayCalls","MonthlyCharge","OverageFee","RoamMins")]= scale(celldataKNN[,c("AccountWeeks", "DataUsage","DayMins","DayCalls","MonthlyCharge","OverageFee","RoamMins")])
+
+#Dummy code for Customer Service Calls as there are 10 levels
+CustServCalls <- as.data.frame(dummy.code(celldataKNN$CustServCalls))
+
+celldataKNN= cbind(celldataKNN,CustServCalls)
+celldataKNN= celldataKNN[,-6]
+
+
+
+#Random splitting of iris data as 70% train and 30%test datasets
+set.seed(123)
+ind <- sample(2, nrow(celldataKNN), replace=TRUE, prob=c(0.7, 0.3))
+trainKNN <- celldataKNN[ind==1,]
+testKNN <- celldataKNN[ind==2,]
+#checking the dimensions of train and test datasets
+dim(trainKNN)
+dim(testKNN)
+
+#removing Target variable from training and test datasets
+trainKNN1 <- trainKNN[,-1]
+testKNN1 <- testKNN[,-1]
+
+
+#storing target variable for testing and training data as factor
+cell_train_labels <- as.factor(trainKNN$Churn) 
+dim(cell_train_labels)
+cell_test_labels <- as.factor(testKNN$Churn)
+dim(cell_train_labels)
+
+#KNN Model building
+KNN_test_pred <- knn(train = trainKNN1, 
+                      test = testKNN1, 
+                      cl= cell_train_labels,
+                      k = 3,
+                      prob=TRUE)
+
+
+# library(gmodels)
+
+CrossTable(x = cell_test_labels, y = KNN_test_pred,prop.chisq=FALSE, 
+           prop.c = FALSE, prop.r = FALSE, prop.t = FALSE)
+knn_tab <- table(KNN_test_pred,cell_test_labels)
+knn_tab
+1 - sum(diag(knn_tab)) / sum(knn_tab)   ## Error
+``` 
+
+Interpretation of the model:  
+
+* The different error rates when K is chosen differently
+    i) Error when k=3 = 10.8% : 89.1%  #sensitivity 0.43 #specificity 0.968
+    ii) Error when k=5 = 9.3% : 90.6%  #sensitivity 0.42 specificity 0.988
+    iii) Error when k=7 = 9.4% : 90.5%  #sensitivity 0.39 specificity 0.992
+    iv) Error when k=9 = 10.1%% : 89.8% #sensitivity 0.35 specificity 0.989
+    v) Error when k=21 = 10.7%% :89.2% #sensitivity 0.28 specificity 0.990
+```{r echo=FALSE}
+#library(e1071)
+
+#confusionMatrix(table(cell_test_labels,KNN_test_pred), positive = "1")
+
+#KNN Model Performance
+
+calc_class_err = function(actual, predicted) {
+  mean(actual != predicted)
+}
+
+
+calc_class_err(actual    = cell_test_labels,
+               predicted = KNN_test_pred) #10.98 Error rate
+
+set.seed(42)
+k_to_try = 1:21
+err_k = rep(x = 0, times = length(k_to_try))
+
+for (i in seq_along(k_to_try)) {
+  pred = knn(train = trainKNN1, 
+             test = testKNN1, 
+             cl= cell_train_labels, 
+             k     = k_to_try[i])
+  err_k[i] = calc_class_err(cell_test_labels, pred)
+}
+
+# plot error vs choice of k
+plot(err_k, type = "b", col = "dodgerblue", cex = 1, pch = 20, 
+     xlab = "k, number of neighbors", ylab = "classification error",
+     main = "(Test) Error Rate vs Neighbors")
+# add line for min error seen
+abline(h = min(err_k), col = "darkorange", lty = 3)
+# add line for minority prevalence in test set
+abline(h = mean(cell_test_labels == "1"), col = "grey", lty = 2)
+```
+
+To infer the above plot, The orange dotted line is the minimum error line which represent the smallest observed test classification error rate. As the number of *K* increases the error rate increases to such that the error rate approaches the minority class prevalence in actual which is grey dotted line.
+
+```{r}
+min(err_k)
+```
+
+* Accuracy reduces as the number of 'k' increases. But at the same time its, important to see the True Positive Rate and False negative rate of the model. 
+* If K=3 is selected, the accuracy is 89% and error rate is 10%, in which the True Positive rate is 0.43 which highest compared to any of the other models with higher number of K. As the aim of the model is to predict the customers who will cancel the service, we should aim at increasing the **TPR or sensitivity** which helps to more accurately capture customers who have in actual churned.  
+
+#### Naive Bayes- Model and Interpretation  
+
+```{r}
+library(naivebayes)
+celldataNB= celldata
+
+attach(celldataNB)
+
+set.seed(300)
+
+ind <- sample(2, nrow(celldataNB), replace=TRUE, prob=c(0.7, 0.3))
+trainNB <- celldataNB[ind==1,]
+testNB <- celldataNB[ind==2,]
+#checking the dimensions of train and test datasets
+dim(trainNB)
+dim(testNB)
+#data is split in a ratio of 70:30 with train and test.
+
+## Check split consistency
+sum(trainNB$Churn==1)/nrow(trainNB)
+sum(testNB$Churn==1)/nrow(testNB)
+sum(Churn==1) / nrow(celldataNB)
+
+#building the naive bayes model
+naive_cell1 <- naive_bayes(Churn ~ . , data = trainNB, laplace = 1)
+naive_cell1$tables
+naive_cell1$prior
+```  
+
+* Running the Naive Bayes model, gives the conditional probabilities of all the variables when known the prior probability of churn Vs non churn customers.
+* In order to interpret, the Naive Bayes model gives the distribution of each of predictor variable given the probability of churn customers is 14.4% and non churn customers is 85.5%.
+* The average weeks of active period that customers who churned was 101 with a standard deviation of 38.8 weeks whereas the mean number of weeks the customers who didn't churn was 100 weeks with a std deviation of 40.27 weeks and likewise the other **Gaussian** distribution variables like RoamMins, Overage Fee, MonthlyCharge, DayCalls, DayMins and DataUsage would be interpreted  with the mean and std deviation of the churned Vs non churned customers given the probability to either of the event.
+* Contract Renewal and Data Plan being a **Bernoulli** distribution, the model flushes the conditional probability which can be interpreted as that out of the 14% of churned customers, approx 73% did a contract renewal where as out of 85% non churned customers, approx. 93% had done a contract renewal; similarly to interpret DataPlan, out of the 14%, only 15% had a data plan where as for the non churned customers - 29% did have a data plan.  
+* Finally, CustServCalls  which is set as Categorical Variable, depicts around 61% customers who of 14.4% churned customers, had churned within three or less customer service calls; which indicates they were not satisfied with the customer service in a way.  
+
+Let's look out for the model performance on test data and comparing the accuracy/error rate:  
+
+```{r echo=FALSE}
+#predicting with model
+p_prob <- predict(naive_cell1, trainNB, type = 'prob')
+#print(round(p_prob,3))
+
+p_probtest <- predict(naive_cell1, testNB, type = 'prob')
+#print(round(p_probtest,3))
+
+
+#To plot the features with Naive Bayes
+plot(naive_cell1)
+
+# Confusion Matrix - train data
+p_class <- predict(naive_cell1, trainNB, type="class")
+#p_class
+
+(tab1 <- table(p_class,trainNB$Churn))
+1 - sum(diag(tab1)) / sum(tab1)   ## Train Error :  13.5%
+
+# Confusion Matrix - test data
+p <- predict(naive_cell1, testNB,type="class")
+(tab2 <- table(p,testNB$Churn))
+1 - sum(diag(tab2)) / sum(tab2) # Test Error : 12.24%
+
+#confusionMatrix(table(p,testNB$Churn),positive = "1")
+
+#ROCR
+ROCRNBTest = prediction(p_probtest[,2], testNB$Churn)
+
+as.numeric(performance(ROCRNBTest, "auc")@y.values)
+perfNB = performance(ROCRNBTest, "tpr","fpr")
+#plot(perf,col="black",lty=2, lwd=2)
+plot(perfNB,lwd=3,colorize = TRUE)
+```
+
+* Concluding from the confusion matrix, the accuracy of the model on train and test of 0.87 and 0.85 respectively, with the error rate being 13.5% on the train data whereas the error on the test being is 12.24% which depicts is a fairly good model and not having the issue of over or under fit.
+* AUC of the model is 0.85
+
+
+### Model Performance - Which one is the best?
+
+* AUC  & Sensitivity of three models on Test data:
+    + Logistic Regression model = 0.749 , Sensitivity= 0.31
+    + KNN model = ranging from 0.89 to 0.91 (based on the number of K) , Sensitivity =0.43
+    + Naive Bayes model = 0.857 , Sensitivity = 0.65
+
+* Based on the AUC of the three models, KNN performs the best but in terms of interpretation of how the model is using an equation of the predictor variables, Logistic Regression can be used and finally in terms of getting a clear segmentation when trying to understand the risk of customer churning and taking measures to retain them, Naive Bayes is a good model because it gives a distribution on customers behavior based on prior probability of churn Vs non-Churn
+
+
+### Actionable Insights & Recommendations 
+
+1. Though the KNN model has a higher Accuracy of predicting the likelihood of whether a customer would churn or no; the model is less informative about the variables that it used to predict and so it becomes difficult for  in a business perspective;
+2. Naive Bayes Model has a descriptive approach. As the model indicates the distribution, and if the company has segmented its customers and has an understanding of the types of customers with the highest lifetime value, then the most valuable at risk customers can be targeted specifically with the Naive Bayes Model;
+3. Customers who are likely to churn because of dissatisfaction which can be known from the customer service calls, they can be retained by using customer satisfaction surveys;
+4. Customers who churn due to higher bills on excessive usage of data, talk time, roaming, etc can be retained by offering discounts/ customized plans which can be interpreted from the coefficients from the Logistic Model.
+5. Lastly but not least, with deciling technique, we can remove the low risk customers from running any marketing/retention campaigns with the aim to reduce cost and maximize hits.  
+
+
+
+
+
+
+
