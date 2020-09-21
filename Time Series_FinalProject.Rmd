@@ -1,0 +1,406 @@
+---
+title: 'Time Series Project: AUSTRALIAN GAS PROD 1956-1995'
+author: "Anupama Rathore"
+date: "23/08/2020"
+output: word_document
+---
+
+# Introduction
+
+Australian monthly gas production between 1956-Jan to 1995-August is a **Time Series** dataset in the *FORECAST* package in **R**.
+The data has a total of 476 observations, which are monthly gas production values. The data has only two variables/columns : *Period* ,*Production*.
+
+## Problem Statement
+
+The objective of this analyse is to build a time series model to forecast 12 periods in future and understand the components that are present in the data set, at the same time use techniques to smoothen the components which would in turn help in better forecasting the gas production for the next 12 periods.
+
+The packages used in this analyze are namely - *forecast*, *ggplot2* and *tseries* packages.
+
+
+```{r setup, include=FALSE}
+getwd()
+
+setwd("/Users/anupama/Documents/Anupama Data Science/GreatLakes/TimeSeries")
+
+#install.packages("forecast")
+
+library(forecast)
+library(ggplot2)
+library(tseries)
+```
+
+
+### Description of the Data  
+```{r echo=FALSE}
+AU.gas<- forecast::gas
+
+class(AU.gas)
+
+#This tells you that the data series is in a time series format
+start(AU.gas)
+end(AU.gas)
+
+
+
+
+# plotting the ts object AU gas dataset 
+autoplot(AU.gas,xlab = "Year", ylab= "Gas Production",
+        main = "Australian Gas Production 1956 - 1995 ") 
+```
+Checking the class of the data shows that its a *"ts"* object which denotes its a time series object. 
+The start period is 1956 Jan and end period is 1995 August. Upon checking the frequency, which also would mean the **periodicity** of the data is *Monthly* and frequency of 12 periods.
+
+Visualizing the above graph, From 1956- 1970, the data does not show any huge increase in the gas production.
+
+### After 1970, the data depicts that there has been a linear increase of the gas production, peaks and troughs indicate the presence of a seasonality component. 
+
+### Exploration of Data
+```{r echo=FALSE}
+
+#checking the data before 1970
+gas_bfr1970 = window(AU.gas, start = c(1956,1),  end= c(1970,1) ,frequency = 12)
+
+autoplot(gas_bfr1970,xlab = "Year", ylab= "Gas Production",
+        main = "Australian Gas Production 1956- 1970 ")
+
+
+#checking the data after 1970
+gas_aft1970 = window(AU.gas, start = c(1970,1), frequency = 12)
+
+autoplot(gas_aft1970,xlab = "Year", ylab= "Gas Production",
+        main = "Australian Gas Production 1970- 1995 ") 
+```
+
+From the above plots, Gas production between 1956-1970 has been ranging from approx 800 to 4000, with a greater variation in the seasonality component whereas gas production after 1970 has both Upward Trend i.e. gas production has increased drastically from 1970 till 1995 and there is a high seasonality fluctuation which also increases post 1985 i.e. in other words it is indicative of **additive** seasonality which increases as the trend increases.
+
+The can be further analyzed by decomposing the data.
+
+We can look at the month plots to understand the seasonality being additive or multiplicative. We can then use the additive or multiplicative model to decompose the data.
+- The additive model is useful when the seasonal variation is relatively constant over time.
+- The multiplicative model is useful when the seasonal variation increases over time.
+
+```{r echo= FALSE}
+
+monthplot(AU.gas,xlab = "Months", ylab= "Gas Production")
+
+boxplot (AU.gas ~cycle(AU.gas), xlab = "Months", ylab= "Gas Production",col="green")
+```
+
+The month plot shows higher production in the months ranging from May to August compared to the other months of the year. The vertical lines depicts the  gas production in the months and horizontal lines depict the average gas production across all months in the times series. The month plot as shows that the seasonality is of the same magnitude across the entire data.
+
+```{r echo=FALSE}
+
+ggseasonplot(AU.gas, year.labels=TRUE, year.labels.left=TRUE
+) + ylab("degree") +
+  ggtitle("Seasonal plot: Aus Gas Prod")
+```
+From the seasonal plot, it is observed that gas production has been increasing over the years, with July month having the highest gas production year on year.
+
+```{r echo=FALSE}
+
+ggseasonplot(gas_aft1970, polar=TRUE) +
+  ylab("degree") +
+  ggtitle("Polar seasonal plot: Australia Gas Production Post 1970 ")
+```
+### The above plots yearly level data showing that the gas production has been increasing year on year.
+
+```{r include=TRUE}
+frequency(AU.gas)
+
+any(is.na(AU.gas)) #checking missing values
+```
+The Frequency of the data is monthly with 12 periods and there is no missing data.
+
+### Time Series Components & Decomposition  
+
+Time series forecasting is applied to extract information from historical series and is used to predict future behavior of the same series based on past pattern.
+Approaches used for Time Series Forecasting: There are two major approaches to time series forecasting.
+I. Decomposition: This method is based on extraction of individual components of time series.
+II. Regression: This method is based on regression on past observations
+
+Components of the Time Series data:
+In order to identify the components present the data; the data has to decomposed. 
+The three components : Trend, Seasonality and  Irregular (Error) are to be identified.
+a. Trend : This component is to identify  and upward, downward or flat trend for any data series in the long term cycle. 
+b. Seasonality : Intra-year stable Fluctuations which are repeatable over the entire length of the ts
+c. Irregular(Error): Random Movements or changes which cannot be explained by Trend or seasonality.  
+
+
+Decomposition can be done in two ways:
+
+#### **Using the Decompose Function**
+
+```{r echo=FALSE}
+# Decompose function
+
+add.gas= decompose(AU.gas, type = "additive")
+plot(add.gas)
+```
+
+Using the decompose function on the entire times series data, we can observe that:
+*a) There is no trend or a flat line from 1956 till 1970, post 1970 till 1980 there is steep linear trend such that the production has increased from approx 8000 to 40000 in 10 years. After 1980 and until 1990, there seem to be slight oscillations during these years and after 1990, there is a down trend for some years
+*b) Seasonality looks constant across the years ranging from -4000 to 3000
+*c) Importantly, there is random effect too which is very prominent, depicting a increase in the variance across those years after 1980 precisely.  
+
+Parting the data after 1970, to give a closer look on decomposition after 1970:
+```{r echo= FALSE}
+add.gas1970=decompose(gas_aft1970, type = "additive")
+plot(add.gas1970)
+#plot(add.gas1970$seasonal)
+#plot(add.gas1970$trend)
+#plot(add.gas1970$random)
+```
+The decompose plot for gas production after 1970 indicates 
+*a)Increasing (Upward) Trend of the gas production in a linear fashion such that production is ranging from 10000 to 50000 values for gas production 
+*b)Constant Seasonality is present but there is a remainder components also applicable which is high and consistent throughout the period.
+
+#### **Using the STL function**
+```{r echo= FALSE}
+#STL function
+
+#overall data
+Inc.gas<-stl(AU.gas, s.window='p') #constant seasonality 
+plot(Inc.gas, main= "Constant Seasonality")
+
+
+(head(Inc.gas$time.series,12))
+head(Inc.gas$time.series[,1],36) #seasonality component
+
+```
+Assuming that there is constant seasonality, we notice from the above plot -
+*- Seasonality ranges on a scale from -4000 to 5000 across all years; however;
+*- Trend, if observed has a larger scale ranging from 0 to 40000; which depicts that Trend is stronger contributor component in the increasing gas production.
+*- Remainder graph shows a constant variance till mid 1970's and then there is a gradual change which can be interpreted as post 1975, there are other factors which has contributed to the increase in gas production and  cannot just be explained by Trend and Seasonality.
+
+A clear breakdown of trend, seasonality and randomness is provided by checking the output of the stl function. Notice that the seasonality component is constant across all the years and a glimpse is shown while checking for 36 periods.  
+
+```{r echo=FALSE}
+#post 1970 data
+
+#decomposing the gas data post 1970 to check trend and seasonality effect
+gas.stl.1970<-stl(gas_aft1970, s.window='p') #constant seasonality 
+autoplot(gas.stl.1970, main= "Post 1970 :Seasonality")
+#gas.stl.1970
+```
+
+
+*- Decomposing post 1970 gas production data, we notice here that Trend is important contributor for the overall increase in production; 
+*- Secondly, there is seasonality factor to it but more importantly there is a remainder component to the series which fluctuates between 1970-1980 and then post 1990 till 1995. 
+
+
+```{r echo=FALSE}
+#de-seasonalized plot vs original plot
+
+deseason.gas <- (gas.stl.1970$time.series[,2]+gas.stl.1970$time.series[,3])
+#deseason.gas
+#ts.plot(deseason.gas, gas_aft1970, col=c("red", "blue"), main="Comparison of Original and Deseasonalized Gas Prod")
+autoplot(cbind(Actual=gas_aft1970, Adjusted=deseason.gas),main="DeSeasonalized Plot")+xlab("Time") +ylab("Gas Production")
+```
+#### Graph shows a great variation in the original and deseasonlised plot, which makes it very clear that a seasanality played a stronger role from 1970 till 1980, where as there is a random component which has contributed to a great effect to the overall series post 1980.  
+
+### Data Smoothening
+
+Since the data has both Trend and Seasonality component, the **Holt's Winter Model** is performed in order to smooth or in other words to remove the effect of the level (alpha), Trend(beta) and Seasonality(gamma) parameters. But before performing and modeling technique, we need to first partition the data into Train and Test.
+
+For the Train set, we consider data from 1970 Jan till 1993 Dec;
+For the Test set, we consider data from 1994 Jan onward.
+
+```{r echo=FALSE}
+train_data = window(gas_aft1970, start = c(1970,1), end = c(1993,12))
+test_data = window(gas_aft1970, start = c(1994))
+
+##  Apply Holt winter method using the ets function
+gas.hw= ets(train_data, model = "ZZZ")
+
+
+autoplot(forecast(gas.hw))
+summary(gas.hw)
+```
+
+*- "ZZZ" is used to automatically select the model parameters
+*- Model has estimated Error as Multiplicative, Trend as Additive and Seasonality as Multiplicative
+*- AIC = 5772 and MAPE = 3.60
+
+```{r echo= FALSE}
+#forecast for the next 20 months
+gas.hw.fc=forecast(gas.hw, h=20)
+autoplot(gas.hw.fc)
+accuracy(gas.hw.fc, test_data)
+
+
+## Accuracy measures: RMSE and MAPE using HW
+
+Vec<- cbind(test_data ,as.data.frame(gas.hw.fc)[,1]) 
+ts.plot(Vec, col=c("blue", "red"), main="Accuracy Plot: Actual vs Forecast")
+legend("bottomright", legend=c("Actual", "Forecast"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+RMSE <- round(sqrt(sum(((Vec[,1]-Vec[,2])^2)/length(Vec[,1]))),4) 
+MAPE <- round(mean(abs(Vec[,1]-Vec[,2])/Vec[,1]),4)
+paste("Accuracy Measures: RMSE:", RMSE, "and MAPE:", MAPE) 
+```
+
+Accuracy plot shows the blue line which actual test data and red line as the forecast for years 1994 till 1995 Aug, with a MAPE of 0.0338.
+
+Checking the accuracy, displays that the MAPE of training and test data is closer to each other i.e. 3.60 and 3.37. Hence this looks a good model.
+
+### Stationary Test 
+
+A series is said to be stationary if its mean and variance are constant over a period of time and, the correlation between the two time periods depends only on the distance or lag between the two periods. Mathematically, let 𝑌𝑡 a time series with these properties:
+Mean: 𝐸(𝑌𝑡) = 𝜇
+Variance: 𝑉𝑎𝑟(𝑌𝑡) = 𝐸(𝑌𝑡 − 𝜇)2 = 𝜎2 
+Correlation: 𝜌𝑘 = 𝐸[(𝑌𝑡 − 𝜇)(𝑌𝑡+𝑘 − 𝜇)/𝜎𝑡𝜎𝑡+𝑘]
+So, if mean, variance and correlation (or auto-correlation) of time series data is constant (at different lags) no matter at what point of time it is measured; i.e. if they are time invariant, the series is called a **stationary time series**. A series not possessing these properties is termed as a non-stationary time series.
+
+Upon Visualizing the decomposed plot, we can observe both trend and seasonality present in the data, hence its not stationary.
+
+**Augmented Dickey-Fuller** Test: A formal test to check whether time series data follows stationary process. Setting the Null and Alternate Hypothesis:
+
+#### Null Hypothesis (Ho): Time Series is Non-stationary
+#### Alternate Hypothesis(Ha): Time Series is Stationary
+
+
+```{r echo=FALSE}
+#checking the stationary test on the full Australia Gas Production Data
+adf.test(AU.gas) 
+```
+At 5% significance, p-value is very high which concludes that series is not stationary; hence, in order to convert the series into stationery, we need to try *Differencing*. This is the process of taking differences between consecutive observations. Usually, the First Order Difference which is the difference from first observation to second observation is done to convert time series into a stationary series.
+
+
+```{r echo=FALSE}
+#Differencing of the stationary series for the orginial data
+diff.au.gas= diff(AU.gas)
+plot(diff.au.gas, main= "Gas Prod: Difference Series")
+
+adf.test(diff.au.gas)
+```
+At a very low p-value less than 0.05, we reject the null in favor of alternate that the series is now stationary. Observe that the mean is near to zero but the variance is still increasing over time.
+
+```{r echo=FALSE}
+#checking the stationary test on the Post 1970 Gas Production Data
+adf.test(gas_aft1970) #p-value is less that 0.05, hence we reject the null hypothesis in favor of alternate that the series is stationary.
+
+diff.aft1970= diff(gas_aft1970) #diff(1)
+plot(diff.aft1970, main= "Difference Series")
+#this series looks with a mean of 0 and constant variance. Hence its sure to say this is a stationary series.
+```
+
+#### Auto-Correlation Plots
+
+Autocorrelation Function (ACF): Autocorrelation of order 𝑝 is the correlation between 𝑌𝑡 and 𝑌𝑡+𝑘 for all values of 𝑘 = 0,1, ..., and −1 ≤ 𝐴𝐶𝐹≤1 and 𝐴𝐶𝐹(0) = 1. ACF measures strength of dependency of current observations on past observations.
+
+Partial Autocorrelation Function (PACF): PACF of order 𝑘 is the autocorrelation between 𝑌𝑡 and 𝑌𝑡+𝑘 adjusting for all the intervening periods i.e. it provides the correlation value between current and 𝑘 - lagged series by removing the influence of all other series that exist in between.
+
+*- ACF and PACF used together to identify the order of the ARMA.
+*- Seasonal ACF and PACF examines correlations for seasonal data.  
+
+```{r echo=FALSE}
+#Checking the partial autocorrelation plot
+par (mfrow= c(3,2))
+
+#Checking the partial autocorrelation plot
+acf(AU.gas, lag.max = 50, main= "ACF:Original Data")  #q=0,1,2
+pacf(AU.gas, lag.max = 50, main ="PACF:Original Series") #p= 0,1,2
+
+acf(gas_aft1970, lag.max = 50, main= "ACF: Post 1970 Data")
+pacf(gas_aft1970, lag.max = 50, main= "PACF:Post1970 Series")
+
+acf(diff.aft1970, lag.max = 50, main="ACF:Diff Series")
+pacf(diff.aft1970, lag.max = 50, main="PACF:Diff Series")
+#dev.off()
+
+#dev.off()
+```
+Observation: ACF plots show a the past value are significantly correlated, Also, this data shows a huge impact of semi-seasonality component in both the original and post 1970 series. Checking the difference series, depicts oscillations too which also interprets to the fact that The larger the amplitude of seasonal fluctuations, the more pronounced the oscillations are in the ACF.
+
+
+### ARIMA MODELLING  
+
+In order to run the ARIMA model, we have to identify the three p,d and q parameters:
+#### "p" from  the pacf plot: No of autoregressive terms
+#### "q" from the ACF plot: No of moving average terms
+#### "d" from the differencing: No of differencing to stationarize the series
+
+```{r echo=FALSE}
+## Plotting the train and Test set 
+autoplot(train_data, series="Train") +
+  autolayer(test_data, series="Test") +
+  ggtitle("Gas: Training and Test data") +
+  xlab("Year") + ylab("Production") +
+  guides(colour=guide_legend(title="Forecast"))
+```
+##### Manual ARIMA Model
+```{r}
+
+#ARIMA with order p(pacf)AR, d(diff order)-I, q(acf)- MA
+#Setting a manual arima with setting all parameters as 1,1,1
+man.arima = arima(train_data, order = c(1,1,1), seasonal = c(1,1,1))
+man.arima #AIC 4943.09
+tsdisplay(residuals(man.arima), lag.max=50, main= "Residuals by Manual ARIMA")
+```
+
+Interpretation:
+1. From the residuals plot of the Manual ARIMA, it is observed that data points are independent of each other and the mean and variance look to be constant.
+2. ACF and PACF plot- All lag residuals are withing the blue line, explaining that residuals are not correlated to each other.  
+
+```{r echo=FALSE}
+## Plotting the forecast of manual arima for 12 advance periods
+autoplot(forecast(man.arima, h=12))
+
+man.arima.fc= forecast(man.arima, h=20)
+
+Box.test(man.arima$residuals, type = "Ljung-Box") #0.635
+```
+Box-Ljung test: This checks whether the residuals of time series data are stationary or not.
+H0: Residuals are stationary
+H1: Residuals are not stationary
+
+At 5% significance, we do not reject the null with a very high p value of 0.63, which is closer to 1 indicating that the residuals are independent and not correlated with each other.
+
+```{r echo=FALSE}
+acf(man.arima$residuals, lag.max = 50)
+
+hist(man.arima$residuals, main="Histogram:Manual ARIMA Residual") ## checking the normal distribution of residuals 
+
+Vec1<- cbind(test_data ,as.data.frame(forecast(man.arima, h=20))[,1])
+ts.plot(Vec1, col=c("blue", "red"), main="Manual ARIMA: Actual vs Forecast")
+legend("bottomright", legend=c("Actual", "Forecast"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+accuracy(man.arima.fc, test_data)
+```
+
+##### Manual ARIMA model accuracy on the next 20 periods with a MAPE of 4.1 and 6.1 on Training and Test data indicates an over fitting model. We will have to try other manual combinations or try Auto ARIMA model.  
+
+##### Auto ARIMA Model
+```{r}
+
+arima.auto.fit = auto.arima(train_data, trace = F, seasonal = T)
+arima.auto.fit
+tsdisplay(residuals(arima.auto.fit), lag.max=50, main= "Residuals by Auto ARIMA")
+
+#AIC 4939.33
+```
+Looks like auto modeling gives us p,d,q = 2,1,1 and seasonal order of P,D,Q=0,1,2 for the next 12 periods
+
+
+```{r echo=FALSE}
+#forecast
+autoplot(forecast(arima.auto.fit, h=12), ylab = "Gas Production", xlab = "Year")
+
+auto.arima.fc= forecast(arima.auto.fit, h=20)
+
+Box.test(auto.arima.fc$residuals, lag=12, type = "Ljung-Box") #0.9207
+#Fail to reject the null, hence residuals are independent
+
+acf(arima.auto.fit$residuals, lag.max = 50)
+
+hist(arima.auto.fit$residuals, main="Histogram:Auto ARIMA Residual") ## checking the normal distribution of residuals 
+
+Vec2<- cbind(test_data ,as.data.frame(forecast(arima.auto.fit, h=20))[,1])
+ts.plot(Vec1, col=c("blue", "red"), main="Auto ARIMA: Actual vs Forecast")
+legend("bottomright", legend=c("Actual", "Forecast"),col=c("blue", "red"), cex=0.8, lty= 1:1)
+
+accuracy(auto.arima.fc, test_data)
+```
+
+##### AIC and MAPE values for Auto ARIMA models are to 4939.33 and 6.37 comparing on the test data. Both Models are neck to neck and they do not show a substantial change. The residuals test from the Ljung Box test definitely show a great change from 0.63 to 0.92 comparing the manual and Auto models. 
+
